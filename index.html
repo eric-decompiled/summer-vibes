@@ -208,7 +208,6 @@
       const H = canvas.height;
       const keys = new Set();
       const niceWords = ["NICE!", "WOW!", "YAY!", "COOL!", "KIND!"];
-      const rainbow = ["#ff5d9e", "#ffd166", "#80ef80", "#5ee7f2", "#a78bfa"];
       const winsKey = "kindness-blaster-wins";
       const music = { context: null, enabled: true, timer: null, step: 0 };
       let last = 0;
@@ -296,7 +295,7 @@
           round: 1,
           nextRoundAt: 0,
           upgrades: { rapid: 0, thrusters: 0, shield: 0 },
-          player: { x: W / 2 - 28, y: H - 92, w: 56, h: 48, speed: 260, cooldown: 0 },
+          player: { x: W / 2 - 28, y: H - 92, w: 56, h: 48, speed: 260, cooldown: 0, pinkShield: 0 },
           monsters: [],
           words: [],
           bolts: [],
@@ -327,7 +326,6 @@
             hp,
             maxHp: hp,
             hitStreak: 0,
-            shield: false,
             vx: ((index + round) % 2 ? 1 : -1) * (62 + Math.random() * 32 + round * 8),
             vy: (index % 2 ? 1 : -1) * (32 + Math.random() * 26 + round * 5),
             shot: .8 + Math.random() * .9,
@@ -453,22 +451,17 @@
               word.hit = true;
               const impactX = monster.x + monster.w / 2;
               const impactY = monster.y + monster.h / 2;
-              if (monster.shield) {
-                monster.shield = false;
+              monster.hp -= 1;
+              monster.hitStreak += 1;
+              state.score += 100;
+              addSparks(impactX, word.y, "#ffd166");
+              if (monster.hp <= 0) {
+                monster.smiling = true;
+                addSparks(impactX, impactY, "#5ee7f2");
+              } else if (monster.hitStreak === 2) {
                 monster.hitStreak = 0;
-                addSparks(impactX, impactY, rainbow[Math.floor(state.time * 10) % rainbow.length]);
-              } else {
-                monster.hp -= 1;
-                monster.hitStreak += 1;
-                state.score += 100;
-                addSparks(impactX, word.y, "#ffd166");
-                if (monster.hp <= 0) {
-                  monster.smiling = true;
-                  addSparks(impactX, impactY, "#5ee7f2");
-                } else if (monster.hitStreak === 2) {
-                  monster.shield = true;
-                  addSparks(impactX, impactY, rainbow[Math.floor(state.time * 10) % rainbow.length]);
-                }
+                state.player.pinkShield = Math.min(3, state.player.pinkShield + 1);
+                addSparks(state.player.x + state.player.w / 2, state.player.y + state.player.h / 2, "#ff5d9e");
               }
             }
           }
@@ -485,7 +478,10 @@
         for (const bolt of state.bolts) {
           if (!bolt.hit && rectsTouch(bolt, p)) {
             bolt.hit = true;
-            if (state.upgrades.shield > 0) {
+            if (p.pinkShield > 0) {
+              p.pinkShield -= 1;
+              addSparks(p.x + p.w / 2, p.y + p.h / 2, "#ff5d9e");
+            } else if (state.upgrades.shield > 0) {
               state.upgrades.shield -= 1;
               addSparks(p.x + p.w / 2, p.y + p.h / 2, "#5ee7f2");
             } else {
@@ -505,6 +501,11 @@
       }
 
       function drawShip(p) {
+        if (p.pinkShield > 0) {
+          ctx.strokeStyle = "#ff5d9e";
+          ctx.lineWidth = 4;
+          ctx.strokeRect(Math.round(p.x - 12), Math.round(p.y - 12), p.w + 24, p.h + 24);
+        }
         if (state.upgrades.shield > 0) {
           ctx.strokeStyle = "#ffd166";
           ctx.lineWidth = 3;
@@ -544,15 +545,6 @@
           pixelRect(25, 61, 42, 8, "#070817");
           pixelRect(33, 53, 26, 8, "#070817");
         }
-        if (b.shield) {
-          const color = rainbow[Math.floor(state.time * 12) % rainbow.length];
-          ctx.strokeStyle = color;
-          ctx.lineWidth = 4;
-          ctx.strokeRect(-12, -10, 112, 112);
-          ctx.strokeStyle = rainbow[(Math.floor(state.time * 12) + 2) % rainbow.length];
-          ctx.lineWidth = 2;
-          ctx.strokeRect(-6, -4, 100, 100);
-        }
         ctx.restore();
       }
 
@@ -564,7 +556,7 @@
         ctx.fillText(`ROUND ${state.round}`, 20, 24);
         ctx.font = "bold 11px Courier New";
         ctx.fillStyle = "#8c94d8";
-        ctx.fillText(`UPGRADES  R${state.upgrades.rapid} T${state.upgrades.thrusters} S${state.upgrades.shield}`, 20, 42);
+        ctx.fillText(`UPGRADES  R${state.upgrades.rapid} T${state.upgrades.thrusters} S${state.upgrades.shield} P${state.player.pinkShield}`, 20, 42);
         ctx.font = "bold 18px Courier New";
         ctx.fillStyle = "#ffd166";
         ctx.textAlign = "center";
