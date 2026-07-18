@@ -183,7 +183,7 @@
       <div class="help" aria-label="Controls">
         <span><kbd>W A S D</kbd> move</span>
         <span><kbd>Space</kbd> shoot donuts</span>
-        <span><kbd>1 2 3 4</kbd> choose upgrades / avatar</span>
+        <span><kbd>1 2 3 4 5</kbd> choose upgrades / avatar</span>
         <span><kbd>Enter</kbd> restart</span>
         <button class="music-toggle" id="music-toggle" type="button" aria-pressed="true">Music: On</button>
       </div>
@@ -208,8 +208,15 @@
       const H = canvas.height;
       const keys = new Set();
       const donutFrostings = ["#ff5d9e", "#5ee7f2", "#a78bfa", "#80ef80"];
-      const cuteAnimals = ["cat", "bunny", "bear", "fox"];
       const winsKey = "kindness-blaster-wins";
+      const avatarKey = "kindness-blaster-avatars";
+      const avatarOptions = [
+        { name: "cat", cost: 0, color: "#f5a25d" },
+        { name: "bunny", cost: 2, color: "#f7f2db" },
+        { name: "frog", cost: 3, color: "#80ef80" },
+        { name: "bear", cost: 4, color: "#a66a49" },
+        { name: "fox", cost: 5, color: "#ff7a45" }
+      ];
       const music = { context: null, enabled: true, timer: null, step: 0 };
       let last = 0;
       let state;
@@ -301,6 +308,18 @@
         catch { /* The game still works if storage is unavailable. */ }
       }
 
+      function readUnlockedAvatars() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(avatarKey));
+          return new Set(["cat", ...(Array.isArray(saved) ? saved : [])]);
+        } catch { return new Set(["cat"]); }
+      }
+
+      function saveUnlockedAvatars() {
+        try { localStorage.setItem(avatarKey, JSON.stringify([...state.unlocked])); }
+        catch { /* Avatar unlocks remain available for this play session. */ }
+      }
+
       const stars = Array.from({ length: 72 }, (_, i) => ({
         x: (i * 137) % W,
         y: 52 + ((i * 83) % (H - 72)),
@@ -310,18 +329,19 @@
 
       function reset() {
         state = {
-          mode: "playing",
+          mode: "start",
           time: 0,
           score: 0,
           wins: readWins(),
+          unlocked: readUnlockedAvatars(),
+          shopMessage: "",
           lastLossWasWin: false,
           round: 1,
           nextRoundAt: 0,
           upgrades: { rapid: 0, thrusters: 0, shield: 0 },
           player: {
             x: W / 2 - 28, y: H - 92, w: 56, h: 48, speed: 260, cooldown: 0,
-            pinkShield: 0, invulnerableUntil: 0,
-            animal: cuteAnimals[Math.floor(Math.random() * cuteAnimals.length)]
+            pinkShield: 0, invulnerableUntil: 0, animal: "cat"
           },
           monsters: [],
           words: [],
@@ -379,10 +399,24 @@
       }
 
       function chooseAvatar(animal) {
-        if (state.mode !== "avatar") return;
+        if (state.mode !== "avatar" && state.mode !== "start") return;
+        const option = avatarOptions.find(item => item.name === animal);
+        if (!option) return;
+        if (!state.unlocked.has(animal)) {
+          if (state.wins < option.cost) {
+            state.shopMessage = `NEED ${option.cost - state.wins} MORE WINS TO UNLOCK ${animal.toUpperCase()}`;
+            return;
+          }
+          state.wins -= option.cost;
+          state.unlocked.add(animal);
+          saveWins();
+          saveUnlockedAvatars();
+          state.shopMessage = `${animal.toUpperCase()} UNLOCKED!`;
+        }
         state.player.animal = animal;
         playSfx("upgrade");
-        loadRound(state.round + 1);
+        if (state.mode === "start") state.mode = "playing";
+        else loadRound(state.round + 1);
       }
 
       function loseGame() {
@@ -475,7 +509,7 @@
         p.x = Math.max(25, Math.min(W - 25 - p.w, p.x));
         p.y = Math.max(H * .48, Math.min(H - 38 - p.h, p.y));
         p.cooldown -= dt;
-        if (keys.has(" ")) shootWord();
+        if (keys.has(" ")) shootDonut();
 
         for (const monster of state.monsters) {
           if (monster.smiling) continue;
@@ -563,6 +597,19 @@
         ctx.fillRect(Math.round(x), Math.round(y), w, h);
       }
 
+      function drawDonut(donut) {
+        const x = donut.x;
+        const y = donut.y;
+        pixelRect(x + 5, y, 10, 3, "#d69054");
+        pixelRect(x + 2, y + 3, 16, 3, donut.frosting);
+        pixelRect(x, y + 6, 20, 8, donut.frosting);
+        pixelRect(x + 2, y + 14, 16, 3, "#d69054");
+        pixelRect(x + 5, y + 17, 10, 3, "#d69054");
+        pixelRect(x + 7, y + 7, 6, 6, "#070817");
+        pixelRect(x + 3, y + 7, 3, 2, "#f7f2db");
+        pixelRect(x + 14, y + 11, 3, 2, "#ffd166");
+      }
+
       function drawShip(p) {
         if (p.pinkShield > 0) {
           ctx.strokeStyle = "#ff5d9e";
@@ -577,6 +624,7 @@
         if (p.animal === "bunny") drawBunny(p);
         else if (p.animal === "bear") drawBear(p);
         else if (p.animal === "fox") drawFox(p);
+        else if (p.animal === "frog") drawFrog(p);
         else drawCat(p);
       }
 
@@ -628,6 +676,20 @@
         pixelRect(p.x + 39, p.y + 7, 7, 8, "#070817");
         drawFace(p, "#ff7a45", "#f7f2db", "#070817");
         pixelRect(p.x + 18, p.y + 31, 20, 9, "#f7f2db");
+      }
+
+      function drawFrog(p) {
+        pixelRect(p.x + 10, p.y + 5, 12, 15, "#80ef80");
+        pixelRect(p.x + 34, p.y + 5, 12, 15, "#80ef80");
+        pixelRect(p.x + 7, p.y + 15, 42, 26, "#80ef80");
+        pixelRect(p.x + 13, p.y + 10, 6, 7, "#f7f2db");
+        pixelRect(p.x + 37, p.y + 10, 6, 7, "#f7f2db");
+        pixelRect(p.x + 15, p.y + 12, 3, 4, "#070817");
+        pixelRect(p.x + 39, p.y + 12, 3, 4, "#070817");
+        pixelRect(p.x + 18, p.y + 28, 20, 4, "#070817");
+        pixelRect(p.x + 22, p.y + 32, 12, 4, "#ff8fb8");
+        pixelRect(p.x + 3, p.y + 35, 10, 9, "#80ef80");
+        pixelRect(p.x + 43, p.y + 35, 10, 9, "#80ef80");
       }
 
       function drawBoss(b, smiling) {
@@ -706,17 +768,18 @@
           ctx.fillStyle = "#f7f2db";
           ctx.font = "bold 16px Courier New";
           ctx.fillText("NEXT: CHOOSE YOUR PILOT", W / 2, 445);
-        } else if (state.mode === "avatar") {
+        } else if (state.mode === "avatar" || state.mode === "start") {
           ctx.fillStyle = "#5ee7f2";
           ctx.font = "bold 34px Courier New";
-          ctx.fillText("PICK YOUR NEXT PILOT", W / 2, 126);
-          drawAvatarCard(1, "cat", 165, 175, "#f5a25d");
-          drawAvatarCard(2, "bunny", 505, 175, "#f7f2db");
-          drawAvatarCard(3, "bear", 165, 310, "#a66a49");
-          drawAvatarCard(4, "fox", 505, 310, "#ff7a45");
+          ctx.fillText(state.mode === "start" ? "CHOOSE YOUR PILOT" : "PICK YOUR NEXT PILOT", W / 2, 126);
+          drawAvatarCard(1, "cat", 75, 170, "#f5a25d");
+          drawAvatarCard(2, "bunny", 355, 170, "#f7f2db");
+          drawAvatarCard(3, "frog", 635, 170, "#80ef80");
+          drawAvatarCard(4, "bear", 215, 315, "#a66a49");
+          drawAvatarCard(5, "fox", 495, 315, "#ff7a45");
           ctx.fillStyle = "#f7f2db";
           ctx.font = "bold 16px Courier New";
-          ctx.fillText(`ROUND ${state.round + 1} STARTS AFTER YOUR PICK`, W / 2, 465);
+          ctx.fillText(state.shopMessage || `WINS ${state.wins} • UNLOCK NEW PILOTS WITH WINS`, W / 2, 465);
         } else {
           ctx.fillStyle = "#ff5d9e";
           ctx.font = "bold 52px Courier New";
@@ -748,21 +811,24 @@
       }
 
       function drawAvatarCard(number, animal, x, y, color) {
-        const active = state.player.animal === animal;
-        pixelRect(x, y, 290, 105, active ? "#273b9d" : "#171b43");
+        const option = avatarOptions.find(item => item.name === animal);
+        const unlocked = state.unlocked.has(animal);
+        const active = unlocked && state.player.animal === animal;
+        pixelRect(x, y, 250, 105, active ? "#273b9d" : unlocked ? "#171b43" : "#25152b");
         pixelRect(x, y, 5, 105, color);
         ctx.textAlign = "left";
         ctx.fillStyle = color;
         ctx.font = "bold 18px Courier New";
         ctx.fillText(`${number}  ${animal.toUpperCase()}`, x + 20, y + 24);
-        const preview = { x: x + 192, y: y + 35, w: 56, h: 48 };
+        const preview = { x: x + 162, y: y + 35, w: 56, h: 48 };
         if (animal === "cat") drawCat(preview);
         else if (animal === "bunny") drawBunny(preview);
         else if (animal === "bear") drawBear(preview);
+        else if (animal === "frog") drawFrog(preview);
         else drawFox(preview);
-        ctx.fillStyle = active ? "#ffd166" : "#a9aed8";
+        ctx.fillStyle = active ? "#ffd166" : unlocked ? "#a9aed8" : "#ffd166";
         ctx.font = "bold 13px Courier New";
-        ctx.fillText(active ? "CURRENT PILOT" : "READY TO FLY", x + 20, y + 55);
+        ctx.fillText(active ? "CURRENT PILOT" : unlocked ? "READY TO FLY" : `BUY • ${option.cost} WINS`, x + 20, y + 55);
         ctx.textAlign = "center";
       }
 
@@ -819,13 +885,13 @@
       addEventListener("keydown", event => {
         startMusic();
         const key = event.key.toLowerCase();
-        if (["w", "a", "s", "d", " ", "enter", "1", "2", "3", "4"].includes(key)) event.preventDefault();
+        if (["w", "a", "s", "d", " ", "enter", "1", "2", "3", "4", "5"].includes(key)) event.preventDefault();
         keys.add(key);
-        if (key === " ") shootWord();
+        if (key === " ") shootDonut();
         if (state.mode === "upgrade" && ["1", "2", "3"].includes(key)) {
           chooseUpgrade({ 1: "rapid", 2: "thrusters", 3: "shield" }[key]);
-        } else if (state.mode === "avatar" && ["1", "2", "3", "4"].includes(key)) {
-          chooseAvatar({ 1: "cat", 2: "bunny", 3: "bear", 4: "fox" }[key]);
+        } else if (["avatar", "start"].includes(state.mode) && ["1", "2", "3", "4", "5"].includes(key)) {
+          chooseAvatar({ 1: "cat", 2: "bunny", 3: "frog", 4: "bear", 5: "fox" }[key]);
         }
         if (key === "enter" && state.mode === "lost") reset();
       });
@@ -842,17 +908,18 @@
           if (y >= 150 && y < 245) chooseUpgrade("rapid");
           else if (y >= 245 && y < 323) chooseUpgrade("thrusters");
           else if (y >= 323 && y < 415) chooseUpgrade("shield");
-        } else if (state.mode === "avatar") {
-          if (x >= 165 && x < 455 && y >= 175 && y < 280) chooseAvatar("cat");
-          else if (x >= 505 && x < 795 && y >= 175 && y < 280) chooseAvatar("bunny");
-          else if (x >= 165 && x < 455 && y >= 310 && y < 415) chooseAvatar("bear");
-          else if (x >= 505 && x < 795 && y >= 310 && y < 415) chooseAvatar("fox");
+        } else if (state.mode === "avatar" || state.mode === "start") {
+          if (x >= 75 && x < 325 && y >= 170 && y < 275) chooseAvatar("cat");
+          else if (x >= 355 && x < 605 && y >= 170 && y < 275) chooseAvatar("bunny");
+          else if (x >= 635 && x < 885 && y >= 170 && y < 275) chooseAvatar("frog");
+          else if (x >= 215 && x < 465 && y >= 315 && y < 420) chooseAvatar("bear");
+          else if (x >= 495 && x < 745 && y >= 315 && y < 420) chooseAvatar("fox");
         }
       });
 
       document.querySelectorAll("[data-key]").forEach(button => {
         const key = button.dataset.key;
-        const press = event => { event.preventDefault(); startMusic(); keys.add(key); if (key === " ") shootWord(); };
+        const press = event => { event.preventDefault(); startMusic(); keys.add(key); if (key === " ") shootDonut(); };
         const release = event => { event.preventDefault(); keys.delete(key); };
         button.addEventListener("pointerdown", press);
         button.addEventListener("pointerup", release);
