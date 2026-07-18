@@ -413,6 +413,10 @@
           a.y < b.y + b.h && a.y + a.h > b.y;
       }
 
+      function deflectionCore(word) {
+        return { x: word.x + word.w / 2 - 7, y: word.y + 3, w: 14, h: 12 };
+      }
+
       function shootWord() {
         const p = state.player;
         if (state.mode !== "playing" || p.cooldown > 0) return;
@@ -487,7 +491,7 @@
 
         for (const word of state.words) {
           for (const bolt of state.bolts) {
-            if (!word.hit && !bolt.hit && rectsTouch(word, bolt)) {
+            if (!word.hit && !bolt.hit && rectsTouch(deflectionCore(word), bolt)) {
               word.hit = true;
               bolt.hit = true;
               addSparks(bolt.x + bolt.w / 2, bolt.y + bolt.h / 2, "#5ee7f2");
@@ -749,6 +753,8 @@
           pixelRect(word.x - 5, word.y - 2, word.w + 10, 22, "#273b9d");
           ctx.fillStyle = "#ffd166";
           ctx.fillText(word.text, word.x, word.y);
+          const core = deflectionCore(word);
+          pixelRect(core.x + 4, core.y + 3, 6, 6, "#5ee7f2");
         }
 
         for (const bolt of state.bolts) {
