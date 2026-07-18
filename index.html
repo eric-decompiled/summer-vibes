@@ -208,8 +208,8 @@
           mode: "playing",
           time: 0,
           score: 0,
-          player: { x: 110, y: H / 2, w: 56, h: 34, speed: 260, cooldown: 0 },
-          boss: { x: 790, y: H / 2 - 52, w: 92, h: 104, hp: 5, maxHp: 5, dir: 1, shot: 1.25 },
+          player: { x: W / 2 - 28, y: H - 92, w: 56, h: 48, speed: 260, cooldown: 0 },
+          boss: { x: W / 2 - 46, y: 72, w: 92, h: 104, hp: 5, maxHp: 5, dir: 1, shot: 1.25 },
           words: [],
           bolts: [],
           sparks: []
@@ -225,7 +225,7 @@
         const p = state.player;
         if (state.mode !== "playing" || p.cooldown > 0) return;
         const text = niceWords[Math.floor(Math.random() * niceWords.length)];
-        state.words.push({ x: p.x + p.w - 2, y: p.y + 7, w: text.length * 13, h: 18, text, speed: 430 });
+        state.words.push({ x: p.x + p.w / 2 - text.length * 6.5, y: p.y - 12, w: text.length * 13, h: 18, text, speed: 430 });
         p.cooldown = .28;
       }
 
@@ -241,8 +241,8 @@
       function update(dt) {
         state.time += dt;
         for (const star of stars) {
-          star.x -= star.speed * dt;
-          if (star.x < -5) { star.x = W + 5; star.y = 54 + Math.random() * (H - 75); }
+          star.y += star.speed * dt;
+          if (star.y > H + 5) { star.y = 52; star.x = Math.random() * W; }
         }
 
         for (const spark of state.sparks) {
@@ -261,21 +261,21 @@
         const length = Math.hypot(dx, dy) || 1;
         p.x += dx / length * p.speed * dt;
         p.y += dy / length * p.speed * dt;
-        p.x = Math.max(25, Math.min(W * .55 - p.w, p.x));
-        p.y = Math.max(60, Math.min(H - 25 - p.h, p.y));
+        p.x = Math.max(25, Math.min(W - 25 - p.w, p.x));
+        p.y = Math.max(H * .48, Math.min(H - 38 - p.h, p.y));
         p.cooldown -= dt;
         if (keys.has(" ")) shootWord();
 
-        boss.y += boss.dir * (72 + (boss.maxHp - boss.hp) * 8) * dt;
-        if (boss.y < 75 || boss.y + boss.h > H - 28) boss.dir *= -1;
+        boss.x += boss.dir * (110 + (boss.maxHp - boss.hp) * 14) * dt;
+        if (boss.x < 26 || boss.x + boss.w > W - 26) boss.dir *= -1;
         boss.shot -= dt;
         if (boss.shot <= 0) {
-          state.bolts.push({ x: boss.x - 18, y: boss.y + boss.h / 2 - 5, w: 18, h: 10, speed: 235 });
+          state.bolts.push({ x: boss.x + boss.w / 2 - 5, y: boss.y + boss.h - 2, w: 10, h: 18, speed: 235 });
           boss.shot = Math.max(.62, 1.4 - state.time * .012);
         }
 
-        for (const word of state.words) word.x += word.speed * dt;
-        for (const bolt of state.bolts) bolt.x -= bolt.speed * dt;
+        for (const word of state.words) word.y -= word.speed * dt;
+        for (const bolt of state.bolts) bolt.y += bolt.speed * dt;
 
         for (const word of state.words) {
           if (!word.hit && rectsTouch(word, boss)) {
@@ -300,8 +300,8 @@
         }
 
         if (rectsTouch(p, boss)) state.mode = "lost";
-        state.words = state.words.filter(w => !w.hit && w.x < W + 100);
-        state.bolts = state.bolts.filter(b => !b.hit && b.x > -30);
+        state.words = state.words.filter(w => !w.hit && w.y > 40);
+        state.bolts = state.bolts.filter(b => !b.hit && b.y < H + 30);
       }
 
       function pixelRect(x, y, w, h, color) {
@@ -310,12 +310,14 @@
       }
 
       function drawShip(p) {
-        pixelRect(p.x, p.y + 9, 40, 20, "#5ee7f2");
-        pixelRect(p.x + 10, p.y + 3, 26, 31, "#5ee7f2");
-        pixelRect(p.x + 35, p.y + 13, 21, 12, "#f7f2db");
-        pixelRect(p.x + 16, p.y + 9, 14, 9, "#273b9d");
-        pixelRect(p.x - 10 - Math.random() * 7, p.y + 13, 13, 12, "#ffd166");
-        pixelRect(p.x - 5, p.y + 16, 8, 6, "#ff5d9e");
+        pixelRect(p.x + 24, p.y, 8, 8, "#f7f2db");
+        pixelRect(p.x + 16, p.y + 8, 24, 8, "#5ee7f2");
+        pixelRect(p.x + 9, p.y + 16, 38, 23, "#5ee7f2");
+        pixelRect(p.x, p.y + 27, 12, 13, "#5ee7f2");
+        pixelRect(p.x + 44, p.y + 27, 12, 13, "#5ee7f2");
+        pixelRect(p.x + 21, p.y + 18, 14, 12, "#273b9d");
+        pixelRect(p.x + 10, p.y + 40, 12, 8, "#ffd166");
+        pixelRect(p.x + 34, p.y + 40, 12, 8, "#ffd166");
       }
 
       function drawBoss(b, smiling) {
@@ -400,13 +402,12 @@
 
         ctx.strokeStyle = "#171b43";
         ctx.lineWidth = 2;
-        for (let x = -((state.time * 35) % 64); x < W; x += 64) {
+        for (let y = 58 + ((state.time * 44) % 48); y < H; y += 48) {
           ctx.beginPath();
-          ctx.moveTo(x, H - 28);
-          ctx.lineTo(x + 120, H - 125);
+          ctx.moveTo(0, y);
+          ctx.lineTo(W, y);
           ctx.stroke();
         }
-        pixelRect(0, H - 28, W, 28, "#11142d");
 
         drawShip(state.player);
         drawBoss(state.boss, state.mode === "won");
@@ -421,7 +422,7 @@
 
         for (const bolt of state.bolts) {
           pixelRect(bolt.x, bolt.y, bolt.w, bolt.h, "#ff5d9e");
-          pixelRect(bolt.x + 5, bolt.y + 3, 8, 4, "#f7f2db");
+          pixelRect(bolt.x + 3, bolt.y + 5, 4, 8, "#f7f2db");
         }
 
         for (const spark of state.sparks) {
