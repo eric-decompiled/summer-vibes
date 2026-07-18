@@ -182,8 +182,8 @@
 
       <div class="help" aria-label="Controls">
         <span><kbd>W A S D</kbd> move</span>
-        <span><kbd>Space</kbd> shoot nice words</span>
-        <span><kbd>1 2 3</kbd> choose upgrade</span>
+        <span><kbd>Space</kbd> shoot donuts</span>
+        <span><kbd>1 2 3 4</kbd> choose upgrades / avatar</span>
         <span><kbd>Enter</kbd> restart</span>
         <button class="music-toggle" id="music-toggle" type="button" aria-pressed="true">Music: On</button>
       </div>
@@ -207,7 +207,7 @@
       const W = canvas.width;
       const H = canvas.height;
       const keys = new Set();
-      const niceWords = ["NICE!", "WOW!", "YAY!", "COOL!", "KIND!"];
+      const donutFrostings = ["#ff5d9e", "#5ee7f2", "#a78bfa", "#80ef80"];
       const cuteAnimals = ["cat", "bunny", "bear", "fox"];
       const winsKey = "kindness-blaster-wins";
       const music = { context: null, enabled: true, timer: null, step: 0 };
@@ -375,6 +375,13 @@
         if (state.mode !== "upgrade") return;
         state.upgrades[type] += 1;
         playSfx("upgrade");
+        state.mode = "avatar";
+      }
+
+      function chooseAvatar(animal) {
+        if (state.mode !== "avatar") return;
+        state.player.animal = animal;
+        playSfx("upgrade");
         loadRound(state.round + 1);
       }
 
@@ -417,11 +424,14 @@
         return { x: word.x + word.w / 2 - 7, y: word.y + 3, w: 14, h: 12 };
       }
 
-      function shootWord() {
+      function shootDonut() {
         const p = state.player;
         if (state.mode !== "playing" || p.cooldown > 0) return;
-        const text = niceWords[Math.floor(Math.random() * niceWords.length)];
-        state.words.push({ x: p.x + p.w / 2 - text.length * 6.5, y: p.y - 12, w: text.length * 13, h: 18, text, speed: 430 });
+        state.words.push({
+          x: p.x + p.w / 2 - 10, y: p.y - 16, w: 20, h: 20,
+          frosting: donutFrostings[Math.floor(Math.random() * donutFrostings.length)],
+          speed: 430
+        });
         p.cooldown = Math.max(.09, .28 - state.upgrades.rapid * .035);
         playSfx("shot");
       }
@@ -695,7 +705,18 @@
           drawUpgradeCard(3, 341, "FRIENDLY SHIELD", "block one hit", "#ffd166");
           ctx.fillStyle = "#f7f2db";
           ctx.font = "bold 16px Courier New";
-          ctx.fillText(`ROUND ${state.round + 1} STARTS AFTER YOUR PICK`, W / 2, 445);
+          ctx.fillText("NEXT: CHOOSE YOUR PILOT", W / 2, 445);
+        } else if (state.mode === "avatar") {
+          ctx.fillStyle = "#5ee7f2";
+          ctx.font = "bold 34px Courier New";
+          ctx.fillText("PICK YOUR NEXT PILOT", W / 2, 126);
+          drawAvatarCard(1, "cat", 165, 175, "#f5a25d");
+          drawAvatarCard(2, "bunny", 505, 175, "#f7f2db");
+          drawAvatarCard(3, "bear", 165, 310, "#a66a49");
+          drawAvatarCard(4, "fox", 505, 310, "#ff7a45");
+          ctx.fillStyle = "#f7f2db";
+          ctx.font = "bold 16px Courier New";
+          ctx.fillText(`ROUND ${state.round + 1} STARTS AFTER YOUR PICK`, W / 2, 465);
         } else {
           ctx.fillStyle = "#ff5d9e";
           ctx.font = "bold 52px Courier New";
@@ -726,6 +747,25 @@
         ctx.textAlign = "center";
       }
 
+      function drawAvatarCard(number, animal, x, y, color) {
+        const active = state.player.animal === animal;
+        pixelRect(x, y, 290, 105, active ? "#273b9d" : "#171b43");
+        pixelRect(x, y, 5, 105, color);
+        ctx.textAlign = "left";
+        ctx.fillStyle = color;
+        ctx.font = "bold 18px Courier New";
+        ctx.fillText(`${number}  ${animal.toUpperCase()}`, x + 20, y + 24);
+        const preview = { x: x + 192, y: y + 35, w: 56, h: 48 };
+        if (animal === "cat") drawCat(preview);
+        else if (animal === "bunny") drawBunny(preview);
+        else if (animal === "bear") drawBear(preview);
+        else drawFox(preview);
+        ctx.fillStyle = active ? "#ffd166" : "#a9aed8";
+        ctx.font = "bold 13px Courier New";
+        ctx.fillText(active ? "CURRENT PILOT" : "READY TO FLY", x + 20, y + 55);
+        ctx.textAlign = "center";
+      }
+
       function draw() {
         ctx.clearRect(0, 0, W, H);
         ctx.fillStyle = "#050617";
@@ -749,11 +789,9 @@
 
         ctx.font = "bold 17px Courier New";
         ctx.textBaseline = "top";
-        for (const word of state.words) {
-          pixelRect(word.x - 5, word.y - 2, word.w + 10, 22, "#273b9d");
-          ctx.fillStyle = "#ffd166";
-          ctx.fillText(word.text, word.x, word.y);
-          const core = deflectionCore(word);
+        for (const donut of state.words) {
+          drawDonut(donut);
+          const core = deflectionCore(donut);
           pixelRect(core.x + 4, core.y + 3, 6, 6, "#5ee7f2");
         }
 
@@ -781,11 +819,13 @@
       addEventListener("keydown", event => {
         startMusic();
         const key = event.key.toLowerCase();
-        if (["w", "a", "s", "d", " ", "enter", "1", "2", "3"].includes(key)) event.preventDefault();
+        if (["w", "a", "s", "d", " ", "enter", "1", "2", "3", "4"].includes(key)) event.preventDefault();
         keys.add(key);
         if (key === " ") shootWord();
         if (state.mode === "upgrade" && ["1", "2", "3"].includes(key)) {
           chooseUpgrade({ 1: "rapid", 2: "thrusters", 3: "shield" }[key]);
+        } else if (state.mode === "avatar" && ["1", "2", "3", "4"].includes(key)) {
+          chooseAvatar({ 1: "cat", 2: "bunny", 3: "bear", 4: "fox" }[key]);
         }
         if (key === "enter" && state.mode === "lost") reset();
       });
@@ -795,12 +835,19 @@
 
       canvas.addEventListener("pointerdown", event => {
         startMusic();
-        if (state.mode !== "upgrade") return;
         const bounds = canvas.getBoundingClientRect();
+        const x = (event.clientX - bounds.left) * W / bounds.width;
         const y = (event.clientY - bounds.top) * H / bounds.height;
-        if (y >= 150 && y < 245) chooseUpgrade("rapid");
-        else if (y >= 245 && y < 323) chooseUpgrade("thrusters");
-        else if (y >= 323 && y < 415) chooseUpgrade("shield");
+        if (state.mode === "upgrade") {
+          if (y >= 150 && y < 245) chooseUpgrade("rapid");
+          else if (y >= 245 && y < 323) chooseUpgrade("thrusters");
+          else if (y >= 323 && y < 415) chooseUpgrade("shield");
+        } else if (state.mode === "avatar") {
+          if (x >= 165 && x < 455 && y >= 175 && y < 280) chooseAvatar("cat");
+          else if (x >= 505 && x < 795 && y >= 175 && y < 280) chooseAvatar("bunny");
+          else if (x >= 165 && x < 455 && y >= 310 && y < 415) chooseAvatar("bear");
+          else if (x >= 505 && x < 795 && y >= 310 && y < 415) chooseAvatar("fox");
+        }
       });
 
       document.querySelectorAll("[data-key]").forEach(button => {
