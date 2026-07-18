@@ -184,7 +184,7 @@
         <span><kbd>W A S D</kbd> move</span>
         <span><kbd>Space</kbd> shoot donuts</span>
         <span><kbd>B</kbd> donut bomb</span>
-        <span><kbd>1 2 3 4 5</kbd> choose upgrades / avatar</span>
+        <span><kbd>1–5</kbd> upgrades · <kbd>1–8</kbd> pilots</span>
         <span><kbd>Enter</kbd> restart</span>
         <button class="music-toggle" id="music-toggle" type="button" aria-pressed="true">Music: On</button>
       </div>
@@ -218,7 +218,9 @@
         { name: "frog", cost: 3, color: "#80ef80" },
         { name: "bear", cost: 4, color: "#a66a49" },
         { name: "fox", cost: 5, color: "#ff7a45" },
-        { name: "lizard", cost: 6, color: "#45d483" }
+        { name: "lizard", cost: 6, color: "#45d483" },
+        { name: "astronaut", cost: 8, color: "#d9e7ff" },
+        { name: "donut", cost: 9, color: "#ff8fb8" }
       ];
       const music = { context: null, enabled: true, timer: null, step: 0 };
       let last = 0;
@@ -705,6 +707,8 @@
         else if (p.animal === "fox") drawFox(p);
         else if (p.animal === "frog") drawFrog(p);
         else if (p.animal === "lizard") drawLizard(p);
+        else if (p.animal === "astronaut") drawAstronaut(p);
+        else if (p.animal === "donut") drawDonutPilot(p);
         else drawCat(p);
       }
 
@@ -785,6 +789,34 @@
         pixelRect(p.x + 5, p.y + 37, 12, 8, "#45d483");
         pixelRect(p.x + 40, p.y + 37, 12, 8, "#45d483");
         pixelRect(p.x + 22, p.y + 2, 7, 7, "#80ef80");
+      }
+
+      function drawAstronaut(p) {
+        pixelRect(p.x + 13, p.y + 3, 30, 24, "#d9e7ff");
+        pixelRect(p.x + 17, p.y + 7, 22, 14, "#23335e");
+        pixelRect(p.x + 20, p.y + 9, 16, 8, "#5ee7f2");
+        pixelRect(p.x + 8, p.y + 25, 40, 18, "#d9e7ff");
+        pixelRect(p.x + 4, p.y + 29, 8, 12, "#8c94d8");
+        pixelRect(p.x + 44, p.y + 29, 8, 12, "#8c94d8");
+        pixelRect(p.x + 18, p.y + 29, 7, 6, "#ff5d9e");
+        pixelRect(p.x + 27, p.y + 29, 7, 6, "#ffd166");
+        pixelRect(p.x + 13, p.y + 40, 12, 8, "#d9e7ff");
+        pixelRect(p.x + 31, p.y + 40, 12, 8, "#d9e7ff");
+      }
+
+      function drawDonutPilot(p) {
+        pixelRect(p.x + 12, p.y + 5, 32, 6, "#ff8fb8");
+        pixelRect(p.x + 5, p.y + 11, 46, 27, "#ff8fb8");
+        pixelRect(p.x + 12, p.y + 38, 32, 6, "#ff8fb8");
+        pixelRect(p.x + 12, p.y + 12, 32, 26, "#eaa761");
+        pixelRect(p.x + 22, p.y + 19, 12, 12, "#5a3652");
+        pixelRect(p.x + 11, p.y + 15, 5, 5, "#ffd166");
+        pixelRect(p.x + 39, p.y + 18, 5, 5, "#5ee7f2");
+        pixelRect(p.x + 16, p.y + 27, 5, 4, "#070817");
+        pixelRect(p.x + 35, p.y + 27, 5, 4, "#070817");
+        pixelRect(p.x + 19, p.y + 33, 18, 3, "#070817");
+        pixelRect(p.x + 6, p.y + 37, 10, 8, "#ff8fb8");
+        pixelRect(p.x + 40, p.y + 37, 10, 8, "#ff8fb8");
       }
 
       function drawBoss(b, smiling) {
@@ -909,12 +941,14 @@
           ctx.fillStyle = "#5ee7f2";
           ctx.font = "bold 34px Courier New";
           ctx.fillText(state.mode === "start" ? "CHOOSE YOUR PILOT" : "PICK YOUR NEXT PILOT", W / 2, 126);
-          drawAvatarCard(1, "cat", 75, 170, "#f5a25d");
-          drawAvatarCard(2, "bunny", 355, 170, "#f7f2db");
-          drawAvatarCard(3, "frog", 635, 170, "#80ef80");
-          drawAvatarCard(4, "bear", 75, 315, "#a66a49");
-          drawAvatarCard(5, "fox", 355, 315, "#ff7a45");
-          drawAvatarCard(6, "lizard", 635, 315, "#45d483");
+          drawAvatarCard(1, "cat", 50, 155, "#f5a25d");
+          drawAvatarCard(2, "bunny", 270, 155, "#f7f2db");
+          drawAvatarCard(3, "frog", 490, 155, "#80ef80");
+          drawAvatarCard(4, "bear", 710, 155, "#a66a49");
+          drawAvatarCard(5, "fox", 50, 285, "#ff7a45");
+          drawAvatarCard(6, "lizard", 270, 285, "#45d483");
+          drawAvatarCard(7, "astronaut", 490, 285, "#d9e7ff");
+          drawAvatarCard(8, "donut", 710, 285, "#ff8fb8");
           ctx.fillStyle = "#f7f2db";
           ctx.font = "bold 16px Courier New";
           ctx.fillText(state.shopMessage || `WINS ${state.wins} • UNLOCK NEW PILOTS WITH WINS`, W / 2, 465);
@@ -952,18 +986,20 @@
         const option = avatarOptions.find(item => item.name === animal);
         const unlocked = state.unlocked.has(animal);
         const active = unlocked && state.player.animal === animal;
-        pixelRect(x, y, 250, 105, active ? "#273b9d" : unlocked ? "#171b43" : "#25152b");
+        pixelRect(x, y, 200, 105, active ? "#273b9d" : unlocked ? "#171b43" : "#25152b");
         pixelRect(x, y, 5, 105, color);
         ctx.textAlign = "left";
         ctx.fillStyle = color;
         ctx.font = "bold 18px Courier New";
         ctx.fillText(`${number}  ${animal.toUpperCase()}`, x + 20, y + 24);
-        const preview = { x: x + 162, y: y + 35, w: 56, h: 48 };
+        const preview = { x: x + 132, y: y + 35, w: 56, h: 48 };
         if (animal === "cat") drawCat(preview);
         else if (animal === "bunny") drawBunny(preview);
         else if (animal === "bear") drawBear(preview);
         else if (animal === "frog") drawFrog(preview);
         else if (animal === "lizard") drawLizard(preview);
+        else if (animal === "astronaut") drawAstronaut(preview);
+        else if (animal === "donut") drawDonutPilot(preview);
         else drawFox(preview);
         ctx.fillStyle = active ? "#ffd166" : unlocked ? "#a9aed8" : "#ffd166";
         ctx.font = "bold 13px Courier New";
@@ -1024,14 +1060,14 @@
       addEventListener("keydown", event => {
         startMusic();
         const key = event.key.toLowerCase();
-        if (["w", "a", "s", "d", "b", " ", "enter", "1", "2", "3", "4", "5"].includes(key)) event.preventDefault();
+        if (["w", "a", "s", "d", "b", " ", "enter", "1", "2", "3", "4", "5", "6", "7", "8"].includes(key)) event.preventDefault();
         keys.add(key);
         if (key === " ") shootDonut();
         if (key === "b") useBomb();
         if (state.mode === "upgrade" && ["1", "2", "3", "4", "5"].includes(key)) {
           chooseUpgrade({ 1: "rapid", 2: "thrusters", 3: "shield", 4: "spread", 5: "bomb" }[key]);
-        } else if (["avatar", "start"].includes(state.mode) && ["1", "2", "3", "4", "5", "6"].includes(key)) {
-          chooseAvatar({ 1: "cat", 2: "bunny", 3: "frog", 4: "bear", 5: "fox", 6: "lizard" }[key]);
+        } else if (["avatar", "start"].includes(state.mode) && ["1", "2", "3", "4", "5", "6", "7", "8"].includes(key)) {
+          chooseAvatar({ 1: "cat", 2: "bunny", 3: "frog", 4: "bear", 5: "fox", 6: "lizard", 7: "astronaut", 8: "donut" }[key]);
         }
         if (key === "enter" && state.mode === "lost") reset();
       });
@@ -1051,12 +1087,14 @@
           else if (y >= 316 && y < 376) chooseUpgrade("spread");
           else if (y >= 378 && y < 438) chooseUpgrade("bomb");
         } else if (state.mode === "avatar" || state.mode === "start") {
-          if (x >= 75 && x < 325 && y >= 170 && y < 275) chooseAvatar("cat");
-          else if (x >= 355 && x < 605 && y >= 170 && y < 275) chooseAvatar("bunny");
-          else if (x >= 635 && x < 885 && y >= 170 && y < 275) chooseAvatar("frog");
-          else if (x >= 75 && x < 325 && y >= 315 && y < 420) chooseAvatar("bear");
-          else if (x >= 355 && x < 605 && y >= 315 && y < 420) chooseAvatar("fox");
-          else if (x >= 635 && x < 885 && y >= 315 && y < 420) chooseAvatar("lizard");
+          if (x >= 50 && x < 250 && y >= 155 && y < 260) chooseAvatar("cat");
+          else if (x >= 270 && x < 470 && y >= 155 && y < 260) chooseAvatar("bunny");
+          else if (x >= 490 && x < 690 && y >= 155 && y < 260) chooseAvatar("frog");
+          else if (x >= 710 && x < 910 && y >= 155 && y < 260) chooseAvatar("bear");
+          else if (x >= 50 && x < 250 && y >= 285 && y < 390) chooseAvatar("fox");
+          else if (x >= 270 && x < 470 && y >= 285 && y < 390) chooseAvatar("lizard");
+          else if (x >= 490 && x < 690 && y >= 285 && y < 390) chooseAvatar("astronaut");
+          else if (x >= 710 && x < 910 && y >= 285 && y < 390) chooseAvatar("donut");
         }
       });
 
