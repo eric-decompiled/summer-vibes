@@ -183,6 +183,7 @@
       <div class="help" aria-label="Controls">
         <span><kbd>W A S D</kbd> move</span>
         <span><kbd>Space</kbd> shoot donuts</span>
+        <span><kbd>B</kbd> donut bomb</span>
         <span><kbd>1 2 3 4 5</kbd> choose upgrades / avatar</span>
         <span><kbd>Enter</kbd> restart</span>
         <button class="music-toggle" id="music-toggle" type="button" aria-pressed="true">Music: On</button>
@@ -196,6 +197,7 @@
           <button class="right" data-key="d" aria-label="Move right">▶</button>
         </div>
         <button class="fire" data-key=" " aria-label="Shoot">NICE!</button>
+        <button class="fire" data-key="b" aria-label="Use donut bomb">BOMB!</button>
       </div>
     </main>
 
@@ -215,7 +217,8 @@
         { name: "bunny", cost: 2, color: "#f7f2db" },
         { name: "frog", cost: 3, color: "#80ef80" },
         { name: "bear", cost: 4, color: "#a66a49" },
-        { name: "fox", cost: 5, color: "#ff7a45" }
+        { name: "fox", cost: 5, color: "#ff7a45" },
+        { name: "lizard", cost: 6, color: "#45d483" }
       ];
       const music = { context: null, enabled: true, timer: null, step: 0 };
       let last = 0;
@@ -255,7 +258,7 @@
         music.step += 1;
       }
 
-      function playSfx(kind) {
+    function playSfx(kind) {
         if (!music.enabled || !music.context) return;
         if (kind === "shot") playTone(91, .045, "square", .035);
         if (kind === "hit") playTone(62, .07, "sawtooth", .045);
@@ -271,6 +274,11 @@
           playTone(69, .07, "square", .04);
           playTone(76, .12, "square", .04, .06);
         }
+        if (kind === "bomb") {
+          playTone(45, .12, "sawtooth", .06);
+          playTone(57, .18, "square", .055, .04);
+          playTone(69, .25, "triangle", .05, .08);
+        }
         if (kind === "win") [72, 76, 79, 84].forEach((note, index) => playTone(note, .12, "square", .04, index * .055));
         if (kind === "lose") [62, 58, 53].forEach((note, index) => playTone(note, .14, "sawtooth", .045, index * .08));
       }
@@ -282,8 +290,23 @@
         if (!music.timer) {
           musicStep();
           music.timer = setInterval(musicStep, 100);
-        }
       }
+    }
+
+    function playRandomLevelSfx() {
+      if (!music.enabled || !music.context) return;
+
+      const stingers = [
+        [72, 76, 79],
+        [76, 81, 84],
+        [67, 74, 79],
+        [79, 83, 86]
+      ];
+      const notes = stingers[Math.floor(Math.random() * stingers.length)];
+      notes.forEach((note, index) => {
+        playTone(note, 0.1, index === 1 ? "square" : "triangle", 0.045, index * 0.06);
+      });
+    }
 
       function toggleMusic() {
         music.enabled = !music.enabled;
@@ -338,10 +361,10 @@
           lastLossWasWin: false,
           round: 1,
           nextRoundAt: 0,
-          upgrades: { rapid: 0, thrusters: 0, shield: 0 },
+          upgrades: { rapid: 0, thrusters: 0, shield: 0, spread: 0 },
           player: {
             x: W / 2 - 28, y: H - 92, w: 56, h: 48, speed: 260, cooldown: 0,
-            pinkShield: 0, invulnerableUntil: 0, animal: "cat"
+            pinkShield: 0, invulnerableUntil: 0, animal: "cat", bombs: 0
           },
           monsters: [],
           words: [],
@@ -360,7 +383,7 @@
         const gap = (W - 70) / columns;
         const hp = 5;
 
-        return Array.from({ length: count }, (_, index) => {
+        const grumps = Array.from({ length: count }, (_, index) => {
           const column = index % columns;
           const row = Math.floor(index / columns);
           const x = 35 + column * gap + (gap - width) / 2;
@@ -379,23 +402,81 @@
             smiling: false
           };
         });
+
+        // An original pixel-art grumpy cat homage: one tougher leader joins every wave.
+        grumps.push({
+          x: W / 2 - 64,
+          y: 76,
+          w: 128,
+          h: 116,
+          scale: 1.18,
+          hp: 10,
+          maxHp: 10,
+          hitStreak: 0,
+          vx: (Math.random() > .5 ? 1 : -1) * (92 + round * 9),
+          vy: (Math.random() > .5 ? 1 : -1) * (44 + round * 5),
+          shot: .55 + Math.random() * .5,
+          smiling: false,
+          isBoss: true
+        });
+
+        return grumps;
       }
 
-      function loadRound(round) {
+    function loadRound(round) {
         state.round = round;
         state.mode = "playing";
+        state.shopMessage = "";
         state.words = [];
         state.bolts = [];
         state.player.x = W / 2 - state.player.w / 2;
         state.player.y = H - 92;
-        state.monsters = buildWave(round);
-      }
+      state.monsters = buildWave(round);
+      playRandomLevelSfx();
+    }
 
       function chooseUpgrade(type) {
         if (state.mode !== "upgrade") return;
-        state.upgrades[type] += 1;
+        if (type === "bomb") {
+          if (state.wins < 2) {
+            state.shopMessage = "NEED 2 WINS TO BUY A DONUT BOMB";
+            return;
+          }
+          state.wins -= 2;
+          state.player.bombs += 1;
+          saveWins();
+        } else {
+          state.upgrades[type] += 1;
+        }
         playSfx("upgrade");
         state.mode = "avatar";
+      }
+
+      function checkWaveClear() {
+        if (state.mode !== "playing" || !state.monsters.every(monster => monster.smiling)) return;
+        state.wins += 1;
+        saveWins();
+        state.mode = "smiling";
+        state.nextRoundAt = state.time + 1.3;
+        state.bolts = [];
+        playSfx("win");
+      }
+
+      function useBomb() {
+        const p = state.player;
+        if (state.mode !== "playing" || p.bombs <= 0) return;
+        p.bombs -= 1;
+        state.bolts = [];
+        for (const monster of state.monsters) {
+          if (monster.smiling) continue;
+          monster.hp -= 2;
+          monster.hitStreak = 0;
+          addSparks(monster.x + monster.w / 2, monster.y + monster.h / 2, "#ffd166");
+          if (monster.hp <= 0) monster.smiling = true;
+        }
+        addSparks(p.x + p.w / 2, p.y + p.h / 2, "#ff5d9e");
+        playSfx("bomb");
+        checkWaveClear();
       }
 
       function chooseAvatar(animal) {
@@ -461,12 +542,16 @@
       function shootDonut() {
         const p = state.player;
         if (state.mode !== "playing" || p.cooldown > 0) return;
-        state.words.push({
-          x: p.x + p.w / 2 - 10, y: p.y - 16, w: 20, h: 20,
-          frosting: donutFrostings[Math.floor(Math.random() * donutFrostings.length)],
-          speed: 430
-        });
-        p.cooldown = Math.max(.09, .28 - state.upgrades.rapid * .035);
+        const offsets = state.upgrades.spread > 1 ? [-18, -9, 0, 9, 18] :
+          state.upgrades.spread > 0 ? [-10, 0, 10] : [0];
+        for (const offset of offsets) {
+          state.words.push({
+            x: p.x + p.w / 2 - 10 + offset, y: p.y - 16, w: 20, h: 20,
+            frosting: donutFrostings[Math.floor(Math.random() * donutFrostings.length)],
+            speed: 430
+          });
+        }
+        p.cooldown = Math.max(.09, .5 - state.upgrades.rapid * .05);
         playSfx("shot");
       }
 
@@ -525,8 +610,9 @@
           }
           monster.shot -= dt;
           if (monster.shot <= 0) {
-            state.bolts.push({ x: monster.x + monster.w / 2 - 5, y: monster.y + monster.h - 2, w: 10, h: 18, speed: 190 + state.round * 14 });
-            monster.shot = Math.max(.72, 1.75 - state.round * .08) + Math.random() * .55;
+            const boltWidth = monster.isBoss ? 14 : 10;
+            state.bolts.push({ x: monster.x + monster.w / 2 - boltWidth / 2, y: monster.y + monster.h - 2, w: boltWidth, h: monster.isBoss ? 22 : 18, speed: 190 + state.round * 14 + (monster.isBoss ? 35 : 0) });
+            monster.shot = Math.max(monster.isBoss ? .5 : .72, (monster.isBoss ? 1.25 : 1.75) - state.round * .08) + Math.random() * .55;
           }
         }
 
@@ -569,14 +655,7 @@
           }
         }
 
-        if (state.monsters.every(monster => monster.smiling)) {
-          state.wins += 1;
-          saveWins();
-          state.mode = "smiling";
-          state.nextRoundAt = state.time + 1.3;
-          state.bolts = [];
-          playSfx("win");
-        }
+        checkWaveClear();
 
         for (const bolt of state.bolts) {
           if (!bolt.hit && rectsTouch(bolt, p)) {
@@ -625,6 +704,7 @@
         else if (p.animal === "bear") drawBear(p);
         else if (p.animal === "fox") drawFox(p);
         else if (p.animal === "frog") drawFrog(p);
+        else if (p.animal === "lizard") drawLizard(p);
         else drawCat(p);
       }
 
@@ -692,7 +772,26 @@
         pixelRect(p.x + 43, p.y + 35, 10, 9, "#80ef80");
       }
 
+      function drawLizard(p) {
+        pixelRect(p.x + 7, p.y + 13, 42, 25, "#45d483");
+        pixelRect(p.x + 12, p.y + 6, 30, 17, "#45d483");
+        pixelRect(p.x + 14, p.y + 8, 7, 7, "#f7f2db");
+        pixelRect(p.x + 33, p.y + 8, 7, 7, "#f7f2db");
+        pixelRect(p.x + 16, p.y + 10, 3, 4, "#070817");
+        pixelRect(p.x + 35, p.y + 10, 3, 4, "#070817");
+        pixelRect(p.x + 18, p.y + 29, 18, 4, "#070817");
+        pixelRect(p.x + 36, p.y + 28, 13, 5, "#ff8fb8");
+        pixelRect(p.x + 46, p.y + 24, 7, 9, "#ff8fb8");
+        pixelRect(p.x + 5, p.y + 37, 12, 8, "#45d483");
+        pixelRect(p.x + 40, p.y + 37, 12, 8, "#45d483");
+        pixelRect(p.x + 22, p.y + 2, 7, 7, "#80ef80");
+      }
+
       function drawBoss(b, smiling) {
+        if (b.isBoss) {
+          drawGrumpyCatBoss(b, smiling);
+          return;
+        }
         const bob = smiling ? Math.sin(state.time * 5) * 4 : 0;
         ctx.save();
         ctx.translate(Math.round(b.x), Math.round(b.y + bob));
@@ -719,6 +818,42 @@
         ctx.restore();
       }
 
+      function drawGrumpyCatBoss(b, smiling) {
+        const bob = smiling ? Math.sin(state.time * 5) * 4 : 0;
+        ctx.save();
+        ctx.translate(Math.round(b.x), Math.round(b.y + bob));
+        ctx.scale(b.scale, b.scale);
+
+        // Dark ears and mask make this leader read as a distinctly grumpy pixel cat.
+        pixelRect(8, 8, 24, 24, "#4b2d3f");
+        pixelRect(72, 8, 24, 24, "#4b2d3f");
+        pixelRect(0, 32, 104, 52, "#ba886e");
+        pixelRect(8, 76, 88, 16, "#ba886e");
+        pixelRect(12, 28, 80, 48, "#f0d5ae");
+        pixelRect(12, 36, 20, 28, "#4b2d3f");
+        pixelRect(72, 36, 20, 28, "#4b2d3f");
+        pixelRect(40, 46, 24, 20, "#4b2d3f");
+        pixelRect(19, 42, 10, 8, "#ffd166");
+        pixelRect(75, 42, 10, 8, "#ffd166");
+        pixelRect(23, 46, 4, 4, "#070817");
+        pixelRect(79, 46, 4, 4, "#070817");
+        pixelRect(48, 54, 8, 6, "#ff8fb8");
+
+        if (smiling) {
+          pixelRect(36, 65, 8, 7, "#070817");
+          pixelRect(44, 72, 18, 7, "#070817");
+          pixelRect(62, 65, 8, 7, "#070817");
+        } else {
+          pixelRect(34, 70, 30, 7, "#070817");
+          pixelRect(40, 63, 18, 7, "#070817");
+        }
+
+        const hpWidth = 88;
+        pixelRect(8, -12, hpWidth, 6, "#25152d");
+        pixelRect(8, -12, hpWidth * Math.max(0, b.hp) / b.maxHp, 6, "#ff5d9e");
+        ctx.restore();
+      }
+
       function drawHud() {
         pixelRect(0, 0, W, 48, "#11142d");
         ctx.fillStyle = "#f7f2db";
@@ -727,7 +862,7 @@
         ctx.fillText(`ROUND ${state.round}`, 20, 24);
         ctx.font = "bold 11px Courier New";
         ctx.fillStyle = "#8c94d8";
-        ctx.fillText(`UPGRADES  R${state.upgrades.rapid} T${state.upgrades.thrusters} S${state.upgrades.shield} P${state.player.pinkShield}`, 20, 42);
+        ctx.fillText(`UPG R${state.upgrades.rapid} T${state.upgrades.thrusters} S${state.upgrades.shield} D${state.upgrades.spread} P${state.player.pinkShield} B${state.player.bombs}`, 20, 42);
         ctx.font = "bold 18px Courier New";
         ctx.fillStyle = "#ffd166";
         ctx.textAlign = "center";
@@ -759,15 +894,17 @@
           ctx.fillText("PREPARING YOUR NEXT UPGRADE...", W / 2, 235);
         } else if (state.mode === "upgrade") {
           ctx.fillStyle = "#ffd166";
-          ctx.font = "bold 36px Courier New";
-          ctx.fillText("CHOOSE A SHIP UPGRADE", W / 2, 126);
+          ctx.font = "bold 31px Courier New";
+          ctx.fillText("UPGRADE OR BUY A BOMB", W / 2, 108);
           ctx.font = "bold 18px Courier New";
-          drawUpgradeCard(1, 185, "RAPID KINDNESS", "shoot faster", "#5ee7f2");
-          drawUpgradeCard(2, 263, "TURBO THRUSTERS", "move faster", "#ff5d9e");
-          drawUpgradeCard(3, 341, "FRIENDLY SHIELD", "block one hit", "#ffd166");
+          drawUpgradeCard(1, 160, "RAPID KINDNESS", "shoot faster", "#5ee7f2");
+          drawUpgradeCard(2, 222, "TURBO THRUSTERS", "move faster", "#ff5d9e");
+          drawUpgradeCard(3, 284, "FRIENDLY SHIELD", "block one hit", "#ffd166");
+          drawUpgradeCard(4, 346, "SPRINKLE SPREAD", "fire extra donuts", "#a78bfa");
+          drawUpgradeCard(5, 408, "DONUT BOMB • 2 WINS", "B key: clear bolts, hit every grump", "#80ef80");
           ctx.fillStyle = "#f7f2db";
-          ctx.font = "bold 16px Courier New";
-          ctx.fillText("NEXT: CHOOSE YOUR PILOT", W / 2, 445);
+          ctx.font = "bold 14px Courier New";
+          ctx.fillText(state.shopMessage || "NEXT: CHOOSE YOUR PILOT", W / 2, 476);
         } else if (state.mode === "avatar" || state.mode === "start") {
           ctx.fillStyle = "#5ee7f2";
           ctx.font = "bold 34px Courier New";
@@ -775,8 +912,9 @@
           drawAvatarCard(1, "cat", 75, 170, "#f5a25d");
           drawAvatarCard(2, "bunny", 355, 170, "#f7f2db");
           drawAvatarCard(3, "frog", 635, 170, "#80ef80");
-          drawAvatarCard(4, "bear", 215, 315, "#a66a49");
-          drawAvatarCard(5, "fox", 495, 315, "#ff7a45");
+          drawAvatarCard(4, "bear", 75, 315, "#a66a49");
+          drawAvatarCard(5, "fox", 355, 315, "#ff7a45");
+          drawAvatarCard(6, "lizard", 635, 315, "#45d483");
           ctx.fillStyle = "#f7f2db";
           ctx.font = "bold 16px Courier New";
           ctx.fillText(state.shopMessage || `WINS ${state.wins} • UNLOCK NEW PILOTS WITH WINS`, W / 2, 465);
@@ -825,6 +963,7 @@
         else if (animal === "bunny") drawBunny(preview);
         else if (animal === "bear") drawBear(preview);
         else if (animal === "frog") drawFrog(preview);
+        else if (animal === "lizard") drawLizard(preview);
         else drawFox(preview);
         ctx.fillStyle = active ? "#ffd166" : unlocked ? "#a9aed8" : "#ffd166";
         ctx.font = "bold 13px Courier New";
@@ -885,13 +1024,14 @@
       addEventListener("keydown", event => {
         startMusic();
         const key = event.key.toLowerCase();
-        if (["w", "a", "s", "d", " ", "enter", "1", "2", "3", "4", "5"].includes(key)) event.preventDefault();
+        if (["w", "a", "s", "d", "b", " ", "enter", "1", "2", "3", "4", "5"].includes(key)) event.preventDefault();
         keys.add(key);
         if (key === " ") shootDonut();
-        if (state.mode === "upgrade" && ["1", "2", "3"].includes(key)) {
-          chooseUpgrade({ 1: "rapid", 2: "thrusters", 3: "shield" }[key]);
-        } else if (["avatar", "start"].includes(state.mode) && ["1", "2", "3", "4", "5"].includes(key)) {
-          chooseAvatar({ 1: "cat", 2: "bunny", 3: "frog", 4: "bear", 5: "fox" }[key]);
+        if (key === "b") useBomb();
+        if (state.mode === "upgrade" && ["1", "2", "3", "4", "5"].includes(key)) {
+          chooseUpgrade({ 1: "rapid", 2: "thrusters", 3: "shield", 4: "spread", 5: "bomb" }[key]);
+        } else if (["avatar", "start"].includes(state.mode) && ["1", "2", "3", "4", "5", "6"].includes(key)) {
+          chooseAvatar({ 1: "cat", 2: "bunny", 3: "frog", 4: "bear", 5: "fox", 6: "lizard" }[key]);
         }
         if (key === "enter" && state.mode === "lost") reset();
       });
@@ -905,21 +1045,30 @@
         const x = (event.clientX - bounds.left) * W / bounds.width;
         const y = (event.clientY - bounds.top) * H / bounds.height;
         if (state.mode === "upgrade") {
-          if (y >= 150 && y < 245) chooseUpgrade("rapid");
-          else if (y >= 245 && y < 323) chooseUpgrade("thrusters");
-          else if (y >= 323 && y < 415) chooseUpgrade("shield");
+          if (y >= 130 && y < 190) chooseUpgrade("rapid");
+          else if (y >= 192 && y < 252) chooseUpgrade("thrusters");
+          else if (y >= 254 && y < 314) chooseUpgrade("shield");
+          else if (y >= 316 && y < 376) chooseUpgrade("spread");
+          else if (y >= 378 && y < 438) chooseUpgrade("bomb");
         } else if (state.mode === "avatar" || state.mode === "start") {
           if (x >= 75 && x < 325 && y >= 170 && y < 275) chooseAvatar("cat");
           else if (x >= 355 && x < 605 && y >= 170 && y < 275) chooseAvatar("bunny");
           else if (x >= 635 && x < 885 && y >= 170 && y < 275) chooseAvatar("frog");
-          else if (x >= 215 && x < 465 && y >= 315 && y < 420) chooseAvatar("bear");
-          else if (x >= 495 && x < 745 && y >= 315 && y < 420) chooseAvatar("fox");
+          else if (x >= 75 && x < 325 && y >= 315 && y < 420) chooseAvatar("bear");
+          else if (x >= 355 && x < 605 && y >= 315 && y < 420) chooseAvatar("fox");
+          else if (x >= 635 && x < 885 && y >= 315 && y < 420) chooseAvatar("lizard");
         }
       });
 
       document.querySelectorAll("[data-key]").forEach(button => {
         const key = button.dataset.key;
-        const press = event => { event.preventDefault(); startMusic(); keys.add(key); if (key === " ") shootDonut(); };
+        const press = event => {
+          event.preventDefault();
+          startMusic();
+          keys.add(key);
+          if (key === " ") shootDonut();
+          if (key === "b") useBomb();
+        };
         const release = event => { event.preventDefault(); keys.delete(key); };
         button.addEventListener("pointerdown", press);
         button.addEventListener("pointerup", release);
