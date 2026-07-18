@@ -208,11 +208,32 @@
           mode: "playing",
           time: 0,
           score: 0,
+          round: 1,
+          nextRoundAt: 0,
           player: { x: W / 2 - 28, y: H - 92, w: 56, h: 48, speed: 260, cooldown: 0 },
           boss: { x: W / 2 - 46, y: 72, w: 92, h: 104, hp: 5, maxHp: 5, dir: 1, shot: 1.25 },
           words: [],
           bolts: [],
           sparks: []
+        };
+      }
+
+      function loadRound(round) {
+        state.round = round;
+        state.mode = "playing";
+        state.words = [];
+        state.bolts = [];
+        state.player.x = W / 2 - state.player.w / 2;
+        state.player.y = H - 92;
+        state.boss = {
+          x: W / 2 - 46,
+          y: 72,
+          w: 92,
+          h: 104,
+          hp: 4 + round,
+          maxHp: 4 + round,
+          dir: round % 2 ? 1 : -1,
+          shot: Math.max(.72, 1.25 - (round - 1) * .12)
         };
       }
 
@@ -252,6 +273,10 @@
         }
         state.sparks = state.sparks.filter(s => s.life > 0);
 
+        if (state.mode === "smiling") {
+          if (state.time >= state.nextRoundAt) loadRound(state.round + 1);
+          return;
+        }
         if (state.mode !== "playing") return;
 
         const p = state.player;
@@ -266,12 +291,12 @@
         p.cooldown -= dt;
         if (keys.has(" ")) shootWord();
 
-        boss.x += boss.dir * (110 + (boss.maxHp - boss.hp) * 14) * dt;
+        boss.x += boss.dir * (110 + (boss.maxHp - boss.hp) * 14 + (state.round - 1) * 28) * dt;
         if (boss.x < 26 || boss.x + boss.w > W - 26) boss.dir *= -1;
         boss.shot -= dt;
         if (boss.shot <= 0) {
           state.bolts.push({ x: boss.x + boss.w / 2 - 5, y: boss.y + boss.h - 2, w: 10, h: 18, speed: 235 });
-          boss.shot = Math.max(.62, 1.4 - state.time * .012);
+          boss.shot = Math.max(.48, 1.4 - state.time * .012 - (state.round - 1) * .11);
         }
 
         for (const word of state.words) word.y -= word.speed * dt;
@@ -284,7 +309,8 @@
             state.score += 100;
             addSparks(boss.x + 15, word.y, "#ffd166");
             if (boss.hp <= 0) {
-              state.mode = "won";
+              state.mode = "smiling";
+              state.nextRoundAt = state.time + 1.3;
               state.bolts = [];
               addSparks(boss.x + boss.w / 2, boss.y + boss.h / 2, "#5ee7f2");
             }
@@ -349,7 +375,7 @@
         ctx.fillStyle = "#f7f2db";
         ctx.font = "bold 18px Courier New";
         ctx.textBaseline = "middle";
-        ctx.fillText("PILOT 01", 20, 24);
+        ctx.fillText(`ROUND ${state.round}`, 20, 24);
         ctx.fillStyle = "#ffd166";
         ctx.textAlign = "center";
         ctx.fillText(`KINDNESS ${String(state.score).padStart(4, "0")}`, W / 2, 24);
@@ -369,13 +395,13 @@
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
 
-        if (state.mode === "won") {
+        if (state.mode === "smiling") {
           ctx.fillStyle = "#5ee7f2";
           ctx.font = "bold 52px Courier New";
-          ctx.fillText("GRUMP CLEARED!", W / 2, 185);
+          ctx.fillText("GRUMP IS SMILING!", W / 2, 185);
           ctx.fillStyle = "#f7f2db";
           ctx.font = "bold 22px Courier New";
-          ctx.fillText("THE BAD GUY IS SMILING :)", W / 2, 235);
+          ctx.fillText(`LOADING ROUND ${state.round + 1}...`, W / 2, 235);
         } else {
           ctx.fillStyle = "#ff5d9e";
           ctx.font = "bold 52px Courier New";
@@ -385,9 +411,11 @@
           ctx.fillText("DODGE THE PINK GLITCH BOLTS", W / 2, 238);
         }
 
-        ctx.fillStyle = "#ffd166";
-        ctx.font = "bold 18px Courier New";
-        ctx.fillText("PRESS ENTER TO TRY AGAIN", W / 2, 420);
+        if (state.mode === "lost") {
+          ctx.fillStyle = "#ffd166";
+          ctx.font = "bold 18px Courier New";
+          ctx.fillText("PRESS ENTER TO TRY AGAIN", W / 2, 420);
+        }
         ctx.textAlign = "left";
       }
 
@@ -410,7 +438,7 @@
         }
 
         drawShip(state.player);
-        drawBoss(state.boss, state.mode === "won");
+        drawBoss(state.boss, state.mode === "smiling");
 
         ctx.font = "bold 17px Courier New";
         ctx.textBaseline = "top";
@@ -446,7 +474,7 @@
         if (["w", "a", "s", "d", " ", "enter"].includes(key)) event.preventDefault();
         keys.add(key);
         if (key === " ") shootWord();
-        if (key === "enter" && state.mode !== "playing") reset();
+        if (key === "enter" && state.mode === "lost") reset();
       });
 
       addEventListener("keyup", event => keys.delete(event.key.toLowerCase()));
