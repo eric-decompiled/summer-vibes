@@ -208,6 +208,7 @@
       const H = canvas.height;
       const keys = new Set();
       const niceWords = ["NICE!", "WOW!", "YAY!", "COOL!", "KIND!"];
+      const cuteAnimals = ["cat", "bunny", "bear", "fox"];
       const winsKey = "kindness-blaster-wins";
       const music = { context: null, enabled: true, timer: null, step: 0 };
       let last = 0;
@@ -317,7 +318,11 @@
           round: 1,
           nextRoundAt: 0,
           upgrades: { rapid: 0, thrusters: 0, shield: 0 },
-          player: { x: W / 2 - 28, y: H - 92, w: 56, h: 48, speed: 260, cooldown: 0, pinkShield: 0 },
+          player: {
+            x: W / 2 - 28, y: H - 92, w: 56, h: 48, speed: 260, cooldown: 0,
+            pinkShield: 0, invulnerableUntil: 0,
+            animal: cuteAnimals[Math.floor(Math.random() * cuteAnimals.length)]
+          },
           monsters: [],
           words: [],
           bolts: [],
@@ -383,6 +388,26 @@
         addSparks(state.player.x + state.player.w / 2, state.player.y + state.player.h / 2, "#ff5d9e");
       }
 
+      function takeShipHit(fromMonster = false) {
+        const p = state.player;
+        if (p.pinkShield > 0) {
+          p.pinkShield -= 1;
+          addSparks(p.x + p.w / 2, p.y + p.h / 2, "#ff5d9e");
+          playSfx("shield");
+        } else if (state.upgrades.shield > 0) {
+          state.upgrades.shield -= 1;
+          addSparks(p.x + p.w / 2, p.y + p.h / 2, "#5ee7f2");
+          playSfx("shield");
+        } else {
+          loseGame();
+          return;
+        }
+        if (fromMonster) {
+          p.y = Math.min(H - 38 - p.h, p.y + 88);
+          p.invulnerableUntil = state.time + .7;
+        }
+      }
+
       function rectsTouch(a, b) {
         return a.x < b.x + b.w && a.x + a.w > b.x &&
           a.y < b.y + b.h && a.y + a.h > b.y;
@@ -446,8 +471,8 @@
             monster.x = Math.max(22, Math.min(W - 22 - monster.w, monster.x));
             monster.vx *= -1;
           }
-          if (monster.y < 62 || monster.y + monster.h > H * .48 - 8) {
-            monster.y = Math.max(62, Math.min(H * .48 - 8 - monster.h, monster.y));
+          if (monster.y < 62 || monster.y + monster.h > H - 100) {
+            monster.y = Math.max(62, Math.min(H - 100 - monster.h, monster.y));
             monster.vy *= -1;
           }
           monster.shot -= dt;
@@ -508,21 +533,13 @@
         for (const bolt of state.bolts) {
           if (!bolt.hit && rectsTouch(bolt, p)) {
             bolt.hit = true;
-            if (p.pinkShield > 0) {
-              p.pinkShield -= 1;
-              addSparks(p.x + p.w / 2, p.y + p.h / 2, "#ff5d9e");
-              playSfx("shield");
-            } else if (state.upgrades.shield > 0) {
-              state.upgrades.shield -= 1;
-              addSparks(p.x + p.w / 2, p.y + p.h / 2, "#5ee7f2");
-              playSfx("shield");
-            } else {
-              loseGame();
-            }
+            takeShipHit();
           }
         }
 
-        if (state.monsters.some(monster => !monster.smiling && rectsTouch(p, monster))) loseGame();
+        if (state.time >= p.invulnerableUntil && state.monsters.some(monster => !monster.smiling && rectsTouch(p, monster))) {
+          takeShipHit(true);
+        }
         state.words = state.words.filter(w => !w.hit && w.y > 40);
         state.bolts = state.bolts.filter(b => !b.hit && b.y < H + 30);
       }
@@ -543,14 +560,60 @@
           ctx.lineWidth = 3;
           ctx.strokeRect(Math.round(p.x - 8), Math.round(p.y - 8), p.w + 16, p.h + 16);
         }
-        pixelRect(p.x + 24, p.y, 8, 8, "#f7f2db");
-        pixelRect(p.x + 16, p.y + 8, 24, 8, "#5ee7f2");
-        pixelRect(p.x + 9, p.y + 16, 38, 23, "#5ee7f2");
-        pixelRect(p.x, p.y + 27, 12, 13, "#5ee7f2");
-        pixelRect(p.x + 44, p.y + 27, 12, 13, "#5ee7f2");
-        pixelRect(p.x + 21, p.y + 18, 14, 12, "#273b9d");
-        pixelRect(p.x + 10, p.y + 40, 12, 8, "#ffd166");
-        pixelRect(p.x + 34, p.y + 40, 12, 8, "#ffd166");
+        if (p.animal === "bunny") drawBunny(p);
+        else if (p.animal === "bear") drawBear(p);
+        else if (p.animal === "fox") drawFox(p);
+        else drawCat(p);
+      }
+
+      function drawFace(p, fur, innerEar, nose) {
+        pixelRect(p.x + 10, p.y + 13, 36, 27, fur);
+        pixelRect(p.x + 15, p.y + 22, 5, 6, "#070817");
+        pixelRect(p.x + 36, p.y + 22, 5, 6, "#070817");
+        pixelRect(p.x + 17, p.y + 22, 2, 2, "#f7f2db");
+        pixelRect(p.x + 38, p.y + 22, 2, 2, "#f7f2db");
+        pixelRect(p.x + 26, p.y + 30, 5, 4, nose);
+        pixelRect(p.x + 23, p.y + 34, 11, 3, "#070817");
+        pixelRect(p.x + 5, p.y + 34, 9, 9, fur);
+        pixelRect(p.x + 42, p.y + 34, 9, 9, fur);
+        pixelRect(p.x + 17, p.y + 40, 9, 6, innerEar);
+        pixelRect(p.x + 31, p.y + 40, 9, 6, innerEar);
+      }
+
+      function drawCat(p) {
+        pixelRect(p.x + 8, p.y + 4, 12, 14, "#f5a25d");
+        pixelRect(p.x + 36, p.y + 4, 12, 14, "#f5a25d");
+        pixelRect(p.x + 11, p.y + 8, 6, 7, "#ffcad4");
+        pixelRect(p.x + 39, p.y + 8, 6, 7, "#ffcad4");
+        drawFace(p, "#f5a25d", "#f7f2db", "#ff5d9e");
+        pixelRect(p.x + 0, p.y + 26, 8, 13, "#f5a25d");
+        pixelRect(p.x + 2, p.y + 21, 6, 7, "#f5a25d");
+      }
+
+      function drawBunny(p) {
+        pixelRect(p.x + 13, p.y, 10, 20, "#f7f2db");
+        pixelRect(p.x + 33, p.y, 10, 20, "#f7f2db");
+        pixelRect(p.x + 16, p.y + 3, 4, 13, "#ffcad4");
+        pixelRect(p.x + 36, p.y + 3, 4, 13, "#ffcad4");
+        drawFace(p, "#f7f2db", "#c4b5fd", "#ff8fb8");
+      }
+
+      function drawBear(p) {
+        pixelRect(p.x + 8, p.y + 7, 13, 13, "#a66a49");
+        pixelRect(p.x + 35, p.y + 7, 13, 13, "#a66a49");
+        pixelRect(p.x + 11, p.y + 10, 7, 7, "#f3c995");
+        pixelRect(p.x + 38, p.y + 10, 7, 7, "#f3c995");
+        drawFace(p, "#a66a49", "#f3c995", "#5c392b");
+        pixelRect(p.x + 21, p.y + 29, 14, 9, "#f3c995");
+      }
+
+      function drawFox(p) {
+        pixelRect(p.x + 7, p.y + 3, 14, 17, "#ff7a45");
+        pixelRect(p.x + 35, p.y + 3, 14, 17, "#ff7a45");
+        pixelRect(p.x + 10, p.y + 7, 7, 8, "#070817");
+        pixelRect(p.x + 39, p.y + 7, 7, 8, "#070817");
+        drawFace(p, "#ff7a45", "#f7f2db", "#070817");
+        pixelRect(p.x + 18, p.y + 31, 20, 9, "#f7f2db");
       }
 
       function drawBoss(b, smiling) {
