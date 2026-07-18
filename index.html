@@ -213,7 +213,7 @@
       let last = 0;
       let state;
 
-      const lead = [76, null, 79, 83, 79, 76, 74, null, 72, 76, 79, 81, 79, 76, 74, 71];
+      const lead = [76, 79, 83, 88, 79, 83, 86, 91, 72, 76, 79, 84, 76, 79, 83, 88];
       const bass = [40, 40, 43, 43, 36, 36, 38, 38];
 
       function frequency(note) {
@@ -238,11 +238,33 @@
       function musicStep() {
         if (!music.enabled || !music.context) return;
         const beat = music.step % 16;
-        playTone(lead[beat], .105, "square", .035);
-        if (beat % 2 === 0) playTone(bass[(beat / 2) % bass.length], .18, "triangle", .055);
-        if (beat % 4 === 0) playTone(28, .07, "sine", .075);
-        if (beat % 4 === 2) playTone(52, .035, "square", .012);
+        playTone(lead[beat], .08, "square", .03);
+        playTone(lead[beat] - 12, .06, "triangle", .018, .012);
+        if (beat % 2 === 0) playTone(bass[(beat / 2) % bass.length], .16, "sawtooth", .045);
+        playTone(96 + (beat % 3) * 3, .018, "square", .009, .01);
+        if (beat % 4 === 0) playTone(28, .055, "sine", .07);
+        if (beat % 4 === 2) playTone(55, .028, "square", .016);
         music.step += 1;
+      }
+
+      function playSfx(kind) {
+        if (!music.enabled || !music.context) return;
+        if (kind === "shot") playTone(91, .045, "square", .035);
+        if (kind === "hit") playTone(62, .07, "sawtooth", .045);
+        if (kind === "deflect") {
+          playTone(94, .045, "square", .035);
+          playTone(101, .07, "triangle", .03, .035);
+        }
+        if (kind === "shield") {
+          playTone(76, .06, "triangle", .045);
+          playTone(83, .10, "square", .035, .045);
+        }
+        if (kind === "upgrade") {
+          playTone(69, .07, "square", .04);
+          playTone(76, .12, "square", .04, .06);
+        }
+        if (kind === "win") [72, 76, 79, 84].forEach((note, index) => playTone(note, .12, "square", .04, index * .055));
+        if (kind === "lose") [62, 58, 53].forEach((note, index) => playTone(note, .14, "sawtooth", .045, index * .08));
       }
 
       function startMusic() {
@@ -251,7 +273,7 @@
         music.context.resume();
         if (!music.timer) {
           musicStep();
-          music.timer = setInterval(musicStep, 125);
+          music.timer = setInterval(musicStep, 100);
         }
       }
 
@@ -347,6 +369,7 @@
       function chooseUpgrade(type) {
         if (state.mode !== "upgrade") return;
         state.upgrades[type] += 1;
+        playSfx("upgrade");
         loadRound(state.round + 1);
       }
 
@@ -356,6 +379,7 @@
         state.wins = Math.max(0, state.wins - 1);
         saveWins();
         state.mode = "lost";
+        playSfx("lose");
         addSparks(state.player.x + state.player.w / 2, state.player.y + state.player.h / 2, "#ff5d9e");
       }
 
@@ -370,6 +394,7 @@
         const text = niceWords[Math.floor(Math.random() * niceWords.length)];
         state.words.push({ x: p.x + p.w / 2 - text.length * 6.5, y: p.y - 12, w: text.length * 13, h: 18, text, speed: 430 });
         p.cooldown = Math.max(.09, .28 - state.upgrades.rapid * .035);
+        playSfx("shot");
       }
 
       function addSparks(x, y, color) {
@@ -441,6 +466,7 @@
               word.hit = true;
               bolt.hit = true;
               addSparks(bolt.x + bolt.w / 2, bolt.y + bolt.h / 2, "#5ee7f2");
+              playSfx("deflect");
             }
           }
         }
@@ -455,13 +481,16 @@
               monster.hitStreak += 1;
               state.score += 100;
               addSparks(impactX, word.y, "#ffd166");
+              playSfx("hit");
               if (monster.hp <= 0) {
                 monster.smiling = true;
                 addSparks(impactX, impactY, "#5ee7f2");
+                playSfx("win");
               } else if (monster.hitStreak === 2) {
                 monster.hitStreak = 0;
                 state.player.pinkShield = Math.min(3, state.player.pinkShield + 1);
                 addSparks(state.player.x + state.player.w / 2, state.player.y + state.player.h / 2, "#ff5d9e");
+                playSfx("shield");
               }
             }
           }
@@ -473,6 +502,7 @@
           state.mode = "smiling";
           state.nextRoundAt = state.time + 1.3;
           state.bolts = [];
+          playSfx("win");
         }
 
         for (const bolt of state.bolts) {
@@ -481,9 +511,11 @@
             if (p.pinkShield > 0) {
               p.pinkShield -= 1;
               addSparks(p.x + p.w / 2, p.y + p.h / 2, "#ff5d9e");
+              playSfx("shield");
             } else if (state.upgrades.shield > 0) {
               state.upgrades.shield -= 1;
               addSparks(p.x + p.w / 2, p.y + p.h / 2, "#5ee7f2");
+              playSfx("shield");
             } else {
               loseGame();
             }
