@@ -211,11 +211,42 @@
           round: 1,
           nextRoundAt: 0,
           player: { x: W / 2 - 28, y: H - 92, w: 56, h: 48, speed: 260, cooldown: 0 },
-          boss: { x: W / 2 - 46, y: 72, w: 92, h: 104, hp: 5, maxHp: 5, dir: 1, shot: 1.25 },
+          monsters: [],
           words: [],
           bolts: [],
           sparks: []
         };
+        state.monsters = buildWave(1);
+      }
+
+      function buildWave(round) {
+        const count = 2 + (round - 1) * 3;
+        const columns = Math.min(5, count);
+        const scale = count <= 2 ? .78 : count <= 5 ? .58 : .47;
+        const width = 108 * scale;
+        const height = 96 * scale;
+        const gap = (W - 70) / columns;
+        const hp = 2 + Math.floor((round - 1) / 2);
+
+        return Array.from({ length: count }, (_, index) => {
+          const column = index % columns;
+          const row = Math.floor(index / columns);
+          const x = 35 + column * gap + (gap - width) / 2;
+          return {
+            x,
+            y: 64 + row * (height + 18),
+            w: width,
+            h: height,
+            scale,
+            hp,
+            maxHp: hp,
+            dir: (index + round) % 2 ? 1 : -1,
+            minX: Math.max(22, x - 38),
+            maxX: Math.min(W - width - 22, x + 38),
+            shot: .8 + Math.random() * .9,
+            smiling: false
+          };
+        });
       }
 
       function loadRound(round) {
@@ -225,16 +256,7 @@
         state.bolts = [];
         state.player.x = W / 2 - state.player.w / 2;
         state.player.y = H - 92;
-        state.boss = {
-          x: W / 2 - 46,
-          y: 72,
-          w: 92,
-          h: 104,
-          hp: 4 + round,
-          maxHp: 4 + round,
-          dir: round % 2 ? 1 : -1,
-          shot: Math.max(.72, 1.25 - (round - 1) * .12)
-        };
+        state.monsters = buildWave(round);
       }
 
       function rectsTouch(a, b) {
@@ -280,7 +302,6 @@
         if (state.mode !== "playing") return;
 
         const p = state.player;
-        const boss = state.boss;
         const dx = (keys.has("d") ? 1 : 0) - (keys.has("a") ? 1 : 0);
         const dy = (keys.has("s") ? 1 : 0) - (keys.has("w") ? 1 : 0);
         const length = Math.hypot(dx, dy) || 1;
@@ -291,30 +312,39 @@
         p.cooldown -= dt;
         if (keys.has(" ")) shootWord();
 
-        boss.x += boss.dir * (110 + (boss.maxHp - boss.hp) * 14 + (state.round - 1) * 28) * dt;
-        if (boss.x < 26 || boss.x + boss.w > W - 26) boss.dir *= -1;
-        boss.shot -= dt;
-        if (boss.shot <= 0) {
-          state.bolts.push({ x: boss.x + boss.w / 2 - 5, y: boss.y + boss.h - 2, w: 10, h: 18, speed: 235 });
-          boss.shot = Math.max(.48, 1.4 - state.time * .012 - (state.round - 1) * .11);
+        for (const monster of state.monsters) {
+          if (monster.smiling) continue;
+          monster.x += monster.dir * (72 + state.round * 13) * dt;
+          if (monster.x < monster.minX || monster.x > monster.maxX) monster.dir *= -1;
+          monster.shot -= dt;
+          if (monster.shot <= 0) {
+            state.bolts.push({ x: monster.x + monster.w / 2 - 5, y: monster.y + monster.h - 2, w: 10, h: 18, speed: 190 + state.round * 14 });
+            monster.shot = Math.max(.72, 1.75 - state.round * .08) + Math.random() * .55;
+          }
         }
 
         for (const word of state.words) word.y -= word.speed * dt;
         for (const bolt of state.bolts) bolt.y += bolt.speed * dt;
 
         for (const word of state.words) {
-          if (!word.hit && rectsTouch(word, boss)) {
-            word.hit = true;
-            boss.hp -= 1;
-            state.score += 100;
-            addSparks(boss.x + 15, word.y, "#ffd166");
-            if (boss.hp <= 0) {
-              state.mode = "smiling";
-              state.nextRoundAt = state.time + 1.3;
-              state.bolts = [];
-              addSparks(boss.x + boss.w / 2, boss.y + boss.h / 2, "#5ee7f2");
+          for (const monster of state.monsters) {
+            if (!word.hit && !monster.smiling && rectsTouch(word, monster)) {
+              word.hit = true;
+              monster.hp -= 1;
+              state.score += 100;
+              addSparks(monster.x + monster.w / 2, word.y, "#ffd166");
+              if (monster.hp <= 0) {
+                monster.smiling = true;
+                addSparks(monster.x + monster.w / 2, monster.y + monster.h / 2, "#5ee7f2");
+              }
             }
           }
+        }
+
+        if (state.monsters.every(monster => monster.smiling)) {
+          state.mode = "smiling";
+          state.nextRoundAt = state.time + 1.3;
+          state.bolts = [];
         }
 
         for (const bolt of state.bolts) {
@@ -325,7 +355,7 @@
           }
         }
 
-        if (rectsTouch(p, boss)) state.mode = "lost";
+        if (state.monsters.some(monster => !monster.smiling && rectsTouch(p, monster))) state.mode = "lost";
         state.words = state.words.filter(w => !w.hit && w.y > 40);
         state.bolts = state.bolts.filter(b => !b.hit && b.y < H + 30);
       }
@@ -348,26 +378,29 @@
 
       function drawBoss(b, smiling) {
         const bob = smiling ? Math.sin(state.time * 5) * 4 : 0;
-        const y = b.y + bob;
-        pixelRect(b.x + 12, y, 68, 8, "#ff5d9e");
-        pixelRect(b.x + 4, y + 8, 84, 72, "#ff5d9e");
-        pixelRect(b.x + 12, y + 80, 20, 16, "#ff5d9e");
-        pixelRect(b.x + 60, y + 80, 20, 16, "#ff5d9e");
-        pixelRect(b.x - 8, y + 20, 12, 38, "#ff5d9e");
-        pixelRect(b.x + 88, y + 20, 12, 38, "#ff5d9e");
-        pixelRect(b.x + 19, y + 25, 14, 14, "#070817");
-        pixelRect(b.x + 59, y + 25, 14, 14, "#070817");
-        pixelRect(b.x + 23, y + 25, 5, 5, "#f7f2db");
-        pixelRect(b.x + 63, y + 25, 5, 5, "#f7f2db");
+        ctx.save();
+        ctx.translate(Math.round(b.x), Math.round(b.y + bob));
+        ctx.scale(b.scale, b.scale);
+        pixelRect(12, 0, 68, 8, "#ff5d9e");
+        pixelRect(4, 8, 84, 72, "#ff5d9e");
+        pixelRect(12, 80, 20, 16, "#ff5d9e");
+        pixelRect(60, 80, 20, 16, "#ff5d9e");
+        pixelRect(-8, 20, 12, 38, "#ff5d9e");
+        pixelRect(88, 20, 12, 38, "#ff5d9e");
+        pixelRect(19, 25, 14, 14, "#070817");
+        pixelRect(59, 25, 14, 14, "#070817");
+        pixelRect(23, 25, 5, 5, "#f7f2db");
+        pixelRect(63, 25, 5, 5, "#f7f2db");
 
         if (smiling) {
-          pixelRect(b.x + 24, y + 53, 8, 8, "#070817");
-          pixelRect(b.x + 32, y + 61, 28, 8, "#070817");
-          pixelRect(b.x + 60, y + 53, 8, 8, "#070817");
+          pixelRect(24, 53, 8, 8, "#070817");
+          pixelRect(32, 61, 28, 8, "#070817");
+          pixelRect(60, 53, 8, 8, "#070817");
         } else {
-          pixelRect(b.x + 25, y + 61, 42, 8, "#070817");
-          pixelRect(b.x + 33, y + 53, 26, 8, "#070817");
+          pixelRect(25, 61, 42, 8, "#070817");
+          pixelRect(33, 53, 26, 8, "#070817");
         }
+        ctx.restore();
       }
 
       function drawHud() {
@@ -381,10 +414,8 @@
         ctx.fillText(`KINDNESS ${String(state.score).padStart(4, "0")}`, W / 2, 24);
         ctx.textAlign = "right";
         ctx.fillStyle = "#f7f2db";
-        ctx.fillText("GRUMP-O-METER", W - 160, 24);
-        for (let i = 0; i < state.boss.maxHp; i++) {
-          pixelRect(W - 143 + i * 25, 17, 18, 14, i < state.boss.hp ? "#ff5d9e" : "#343975");
-        }
+        const cheered = state.monsters.filter(monster => monster.smiling).length;
+        ctx.fillText(`GRUMPS ${cheered}/${state.monsters.length}`, W - 20, 24);
         ctx.textAlign = "left";
       }
 
@@ -398,7 +429,7 @@
         if (state.mode === "smiling") {
           ctx.fillStyle = "#5ee7f2";
           ctx.font = "bold 52px Courier New";
-          ctx.fillText("GRUMP IS SMILING!", W / 2, 185);
+          ctx.fillText("THE GRUMPS ARE SMILING!", W / 2, 185);
           ctx.fillStyle = "#f7f2db";
           ctx.font = "bold 22px Courier New";
           ctx.fillText(`LOADING ROUND ${state.round + 1}...`, W / 2, 235);
@@ -438,7 +469,7 @@
         }
 
         drawShip(state.player);
-        drawBoss(state.boss, state.mode === "smiling");
+        for (const monster of state.monsters) drawBoss(monster, monster.smiling || state.mode === "smiling");
 
         ctx.font = "bold 17px Courier New";
         ctx.textBaseline = "top";
