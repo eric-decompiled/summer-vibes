@@ -3,9 +3,466 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Summer Vibes</title>
+    <meta name="theme-color" content="#070817" />
+    <title>Kindness Blaster</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --ink: #f7f2db;
+        --cyan: #5ee7f2;
+        --pink: #ff5d9e;
+        --yellow: #ffd166;
+        --night: #070817;
+        --panel: #11142d;
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body {
+        margin: 0;
+        min-height: 100%;
+        background:
+          radial-gradient(circle at 50% 0%, #222550 0, transparent 38rem),
+          var(--night);
+        color: var(--ink);
+        font-family: "Courier New", Courier, monospace;
+      }
+
+      body {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 22px;
+        overflow: hidden;
+      }
+
+      .arcade {
+        width: min(1040px, 100%);
+        text-align: center;
+      }
+
+      .eyebrow {
+        margin: 0 0 9px;
+        color: var(--yellow);
+        font-size: clamp(.68rem, 1.5vw, .86rem);
+        font-weight: 900;
+        letter-spacing: .2em;
+        text-transform: uppercase;
+        text-shadow: 2px 2px #a52b62;
+      }
+
+      h1 {
+        margin: 0 0 16px;
+        font-size: clamp(1.65rem, 5vw, 3.5rem);
+        line-height: .9;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        text-shadow: 4px 4px 0 #273b9d, 7px 7px 0 #ff5d9e;
+      }
+
+      .cabinet {
+        position: relative;
+        border: 5px solid var(--ink);
+        box-shadow:
+          0 0 0 5px #343975,
+          0 0 0 10px #11142d,
+          14px 14px 0 #03040d;
+        background: #02030c;
+        image-rendering: pixelated;
+      }
+
+      canvas {
+        display: block;
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        background: #050617;
+        image-rendering: pixelated;
+      }
+
+      .scanlines {
+        pointer-events: none;
+        position: absolute;
+        inset: 0;
+        background: repeating-linear-gradient(
+          to bottom,
+          transparent 0,
+          transparent 3px,
+          rgba(0, 0, 0, .18) 4px
+        );
+        mix-blend-mode: multiply;
+      }
+
+      .help {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 10px 24px;
+        margin-top: 22px;
+        font-size: clamp(.72rem, 1.8vw, .9rem);
+        font-weight: 900;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+      }
+
+      .help span { color: #a9aed8; }
+      kbd {
+        border: 2px solid var(--ink);
+        border-bottom-width: 4px;
+        padding: 3px 7px;
+        color: var(--yellow);
+        background: #181b3c;
+        font: inherit;
+      }
+
+      .touch {
+        display: none;
+        justify-content: space-between;
+        align-items: end;
+        margin-top: 14px;
+        user-select: none;
+        touch-action: none;
+      }
+
+      .dpad {
+        display: grid;
+        grid-template-columns: repeat(3, 44px);
+        grid-template-rows: repeat(2, 44px);
+        gap: 4px;
+      }
+
+      .touch button {
+        min-width: 44px;
+        min-height: 44px;
+        border: 2px solid var(--ink);
+        border-bottom-width: 5px;
+        border-radius: 0;
+        background: #1c2049;
+        color: var(--ink);
+        font: 900 1rem "Courier New", monospace;
+      }
+
+      .touch button:active { transform: translateY(3px); border-bottom-width: 2px; }
+      .up { grid-column: 2; }
+      .left { grid-column: 1; grid-row: 2; }
+      .down { grid-column: 2; grid-row: 2; }
+      .right { grid-column: 3; grid-row: 2; }
+      .fire { width: 92px; color: #101225 !important; background: var(--yellow) !important; }
+
+      @media (pointer: coarse), (max-height: 680px) {
+        body { overflow: auto; padding: 12px; }
+        .touch { display: flex; }
+        .help { margin-top: 16px; }
+      }
+    </style>
   </head>
   <body>
-    <h1>Hello TeckyBrains</h1>
+    <main class="arcade">
+      <p class="eyebrow">A one-screen kindness mission</p>
+      <h1>Kindness Blaster</h1>
+
+      <div class="cabinet">
+        <canvas id="game" width="960" height="540" aria-label="Kindness Blaster arcade game">
+          Your browser needs canvas support to play Kindness Blaster.
+        </canvas>
+        <div class="scanlines" aria-hidden="true"></div>
+      </div>
+
+      <div class="help" aria-label="Controls">
+        <span><kbd>W A S D</kbd> move</span>
+        <span><kbd>Space</kbd> shoot nice words</span>
+        <span><kbd>Enter</kbd> restart</span>
+      </div>
+
+      <div class="touch" aria-label="Touch controls">
+        <div class="dpad">
+          <button class="up" data-key="w" aria-label="Move up">▲</button>
+          <button class="left" data-key="a" aria-label="Move left">◀</button>
+          <button class="down" data-key="s" aria-label="Move down">▼</button>
+          <button class="right" data-key="d" aria-label="Move right">▶</button>
+        </div>
+        <button class="fire" data-key=" " aria-label="Shoot">NICE!</button>
+      </div>
+    </main>
+
+    <script>
+      const canvas = document.querySelector("#game");
+      const ctx = canvas.getContext("2d");
+      ctx.imageSmoothingEnabled = false;
+
+      const W = canvas.width;
+      const H = canvas.height;
+      const keys = new Set();
+      const niceWords = ["NICE!", "WOW!", "YAY!", "COOL!", "KIND!"];
+      let last = 0;
+      let state;
+
+      const stars = Array.from({ length: 72 }, (_, i) => ({
+        x: (i * 137) % W,
+        y: 52 + ((i * 83) % (H - 72)),
+        size: i % 9 === 0 ? 4 : i % 3 === 0 ? 2 : 1,
+        speed: 18 + (i % 4) * 18
+      }));
+
+      function reset() {
+        state = {
+          mode: "playing",
+          time: 0,
+          score: 0,
+          player: { x: 110, y: H / 2, w: 56, h: 34, speed: 260, cooldown: 0 },
+          boss: { x: 790, y: H / 2 - 52, w: 92, h: 104, hp: 5, maxHp: 5, dir: 1, shot: 1.25 },
+          words: [],
+          bolts: [],
+          sparks: []
+        };
+      }
+
+      function rectsTouch(a, b) {
+        return a.x < b.x + b.w && a.x + a.w > b.x &&
+          a.y < b.y + b.h && a.y + a.h > b.y;
+      }
+
+      function shootWord() {
+        const p = state.player;
+        if (state.mode !== "playing" || p.cooldown > 0) return;
+        const text = niceWords[Math.floor(Math.random() * niceWords.length)];
+        state.words.push({ x: p.x + p.w - 2, y: p.y + 7, w: text.length * 13, h: 18, text, speed: 430 });
+        p.cooldown = .28;
+      }
+
+      function addSparks(x, y, color) {
+        for (let i = 0; i < 9; i++) {
+          state.sparks.push({
+            x, y, vx: (Math.random() - .5) * 210, vy: (Math.random() - .5) * 210,
+            life: .45, color
+          });
+        }
+      }
+
+      function update(dt) {
+        state.time += dt;
+        for (const star of stars) {
+          star.x -= star.speed * dt;
+          if (star.x < -5) { star.x = W + 5; star.y = 54 + Math.random() * (H - 75); }
+        }
+
+        for (const spark of state.sparks) {
+          spark.x += spark.vx * dt;
+          spark.y += spark.vy * dt;
+          spark.life -= dt;
+        }
+        state.sparks = state.sparks.filter(s => s.life > 0);
+
+        if (state.mode !== "playing") return;
+
+        const p = state.player;
+        const boss = state.boss;
+        const dx = (keys.has("d") ? 1 : 0) - (keys.has("a") ? 1 : 0);
+        const dy = (keys.has("s") ? 1 : 0) - (keys.has("w") ? 1 : 0);
+        const length = Math.hypot(dx, dy) || 1;
+        p.x += dx / length * p.speed * dt;
+        p.y += dy / length * p.speed * dt;
+        p.x = Math.max(25, Math.min(W * .55 - p.w, p.x));
+        p.y = Math.max(60, Math.min(H - 25 - p.h, p.y));
+        p.cooldown -= dt;
+        if (keys.has(" ")) shootWord();
+
+        boss.y += boss.dir * (72 + (boss.maxHp - boss.hp) * 8) * dt;
+        if (boss.y < 75 || boss.y + boss.h > H - 28) boss.dir *= -1;
+        boss.shot -= dt;
+        if (boss.shot <= 0) {
+          state.bolts.push({ x: boss.x - 18, y: boss.y + boss.h / 2 - 5, w: 18, h: 10, speed: 235 });
+          boss.shot = Math.max(.62, 1.4 - state.time * .012);
+        }
+
+        for (const word of state.words) word.x += word.speed * dt;
+        for (const bolt of state.bolts) bolt.x -= bolt.speed * dt;
+
+        for (const word of state.words) {
+          if (!word.hit && rectsTouch(word, boss)) {
+            word.hit = true;
+            boss.hp -= 1;
+            state.score += 100;
+            addSparks(boss.x + 15, word.y, "#ffd166");
+            if (boss.hp <= 0) {
+              state.mode = "won";
+              state.bolts = [];
+              addSparks(boss.x + boss.w / 2, boss.y + boss.h / 2, "#5ee7f2");
+            }
+          }
+        }
+
+        for (const bolt of state.bolts) {
+          if (!bolt.hit && rectsTouch(bolt, p)) {
+            bolt.hit = true;
+            state.mode = "lost";
+            addSparks(p.x + p.w / 2, p.y + p.h / 2, "#ff5d9e");
+          }
+        }
+
+        if (rectsTouch(p, boss)) state.mode = "lost";
+        state.words = state.words.filter(w => !w.hit && w.x < W + 100);
+        state.bolts = state.bolts.filter(b => !b.hit && b.x > -30);
+      }
+
+      function pixelRect(x, y, w, h, color) {
+        ctx.fillStyle = color;
+        ctx.fillRect(Math.round(x), Math.round(y), w, h);
+      }
+
+      function drawShip(p) {
+        pixelRect(p.x, p.y + 9, 40, 20, "#5ee7f2");
+        pixelRect(p.x + 10, p.y + 3, 26, 31, "#5ee7f2");
+        pixelRect(p.x + 35, p.y + 13, 21, 12, "#f7f2db");
+        pixelRect(p.x + 16, p.y + 9, 14, 9, "#273b9d");
+        pixelRect(p.x - 10 - Math.random() * 7, p.y + 13, 13, 12, "#ffd166");
+        pixelRect(p.x - 5, p.y + 16, 8, 6, "#ff5d9e");
+      }
+
+      function drawBoss(b, smiling) {
+        const bob = smiling ? Math.sin(state.time * 5) * 4 : 0;
+        const y = b.y + bob;
+        pixelRect(b.x + 12, y, 68, 8, "#ff5d9e");
+        pixelRect(b.x + 4, y + 8, 84, 72, "#ff5d9e");
+        pixelRect(b.x + 12, y + 80, 20, 16, "#ff5d9e");
+        pixelRect(b.x + 60, y + 80, 20, 16, "#ff5d9e");
+        pixelRect(b.x - 8, y + 20, 12, 38, "#ff5d9e");
+        pixelRect(b.x + 88, y + 20, 12, 38, "#ff5d9e");
+        pixelRect(b.x + 19, y + 25, 14, 14, "#070817");
+        pixelRect(b.x + 59, y + 25, 14, 14, "#070817");
+        pixelRect(b.x + 23, y + 25, 5, 5, "#f7f2db");
+        pixelRect(b.x + 63, y + 25, 5, 5, "#f7f2db");
+
+        if (smiling) {
+          pixelRect(b.x + 24, y + 53, 8, 8, "#070817");
+          pixelRect(b.x + 32, y + 61, 28, 8, "#070817");
+          pixelRect(b.x + 60, y + 53, 8, 8, "#070817");
+        } else {
+          pixelRect(b.x + 25, y + 61, 42, 8, "#070817");
+          pixelRect(b.x + 33, y + 53, 26, 8, "#070817");
+        }
+      }
+
+      function drawHud() {
+        pixelRect(0, 0, W, 48, "#11142d");
+        ctx.fillStyle = "#f7f2db";
+        ctx.font = "bold 18px Courier New";
+        ctx.textBaseline = "middle";
+        ctx.fillText("PILOT 01", 20, 24);
+        ctx.fillStyle = "#ffd166";
+        ctx.textAlign = "center";
+        ctx.fillText(`KINDNESS ${String(state.score).padStart(4, "0")}`, W / 2, 24);
+        ctx.textAlign = "right";
+        ctx.fillStyle = "#f7f2db";
+        ctx.fillText("GRUMP-O-METER", W - 160, 24);
+        for (let i = 0; i < state.boss.maxHp; i++) {
+          pixelRect(W - 143 + i * 25, 17, 18, 14, i < state.boss.hp ? "#ff5d9e" : "#343975");
+        }
+        ctx.textAlign = "left";
+      }
+
+      function drawOverlay() {
+        if (state.mode === "playing") return;
+        ctx.fillStyle = "rgba(3, 4, 13, .76)";
+        ctx.fillRect(0, 48, W, H - 48);
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        if (state.mode === "won") {
+          ctx.fillStyle = "#5ee7f2";
+          ctx.font = "bold 52px Courier New";
+          ctx.fillText("GRUMP CLEARED!", W / 2, 185);
+          ctx.fillStyle = "#f7f2db";
+          ctx.font = "bold 22px Courier New";
+          ctx.fillText("THE BAD GUY IS SMILING :)", W / 2, 235);
+        } else {
+          ctx.fillStyle = "#ff5d9e";
+          ctx.font = "bold 52px Courier New";
+          ctx.fillText("SHIP BONKED!", W / 2, 190);
+          ctx.fillStyle = "#f7f2db";
+          ctx.font = "bold 22px Courier New";
+          ctx.fillText("DODGE THE PINK GLITCH BOLTS", W / 2, 238);
+        }
+
+        ctx.fillStyle = "#ffd166";
+        ctx.font = "bold 18px Courier New";
+        ctx.fillText("PRESS ENTER TO TRY AGAIN", W / 2, 420);
+        ctx.textAlign = "left";
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, W, H);
+        ctx.fillStyle = "#050617";
+        ctx.fillRect(0, 0, W, H);
+
+        for (const star of stars) {
+          pixelRect(star.x, star.y, star.size, star.size, star.size > 2 ? "#ffd166" : "#8c94d8");
+        }
+
+        ctx.strokeStyle = "#171b43";
+        ctx.lineWidth = 2;
+        for (let x = -((state.time * 35) % 64); x < W; x += 64) {
+          ctx.beginPath();
+          ctx.moveTo(x, H - 28);
+          ctx.lineTo(x + 120, H - 125);
+          ctx.stroke();
+        }
+        pixelRect(0, H - 28, W, 28, "#11142d");
+
+        drawShip(state.player);
+        drawBoss(state.boss, state.mode === "won");
+
+        ctx.font = "bold 17px Courier New";
+        ctx.textBaseline = "top";
+        for (const word of state.words) {
+          pixelRect(word.x - 5, word.y - 2, word.w + 10, 22, "#273b9d");
+          ctx.fillStyle = "#ffd166";
+          ctx.fillText(word.text, word.x, word.y);
+        }
+
+        for (const bolt of state.bolts) {
+          pixelRect(bolt.x, bolt.y, bolt.w, bolt.h, "#ff5d9e");
+          pixelRect(bolt.x + 5, bolt.y + 3, 8, 4, "#f7f2db");
+        }
+
+        for (const spark of state.sparks) {
+          pixelRect(spark.x, spark.y, 5, 5, spark.color);
+        }
+
+        drawHud();
+        drawOverlay();
+      }
+
+      function frame(now) {
+        const dt = Math.min((now - last) / 1000 || 0, .034);
+        last = now;
+        update(dt);
+        draw();
+        requestAnimationFrame(frame);
+      }
+
+      addEventListener("keydown", event => {
+        const key = event.key.toLowerCase();
+        if (["w", "a", "s", "d", " ", "enter"].includes(key)) event.preventDefault();
+        keys.add(key);
+        if (key === " ") shootWord();
+        if (key === "enter" && state.mode !== "playing") reset();
+      });
+
+      addEventListener("keyup", event => keys.delete(event.key.toLowerCase()));
+      addEventListener("blur", () => keys.clear());
+
+      document.querySelectorAll("[data-key]").forEach(button => {
+        const key = button.dataset.key;
+        const press = event => { event.preventDefault(); keys.add(key); if (key === " ") shootWord(); };
+        const release = event => { event.preventDefault(); keys.delete(key); };
+        button.addEventListener("pointerdown", press);
+        button.addEventListener("pointerup", release);
+        button.addEventListener("pointercancel", release);
+        button.addEventListener("pointerleave", release);
+      });
+
+      reset();
+      requestAnimationFrame(frame);
+    </script>
   </body>
 </html>
