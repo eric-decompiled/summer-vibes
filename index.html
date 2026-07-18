@@ -194,8 +194,19 @@
       const H = canvas.height;
       const keys = new Set();
       const niceWords = ["NICE!", "WOW!", "YAY!", "COOL!", "KIND!"];
+      const winsKey = "kindness-blaster-wins";
       let last = 0;
       let state;
+
+      function readWins() {
+        try { return Math.max(0, Number(localStorage.getItem(winsKey)) || 0); }
+        catch { return 0; }
+      }
+
+      function saveWins() {
+        try { localStorage.setItem(winsKey, String(state.wins)); }
+        catch { /* The game still works if storage is unavailable. */ }
+      }
 
       const stars = Array.from({ length: 72 }, (_, i) => ({
         x: (i * 137) % W,
@@ -209,6 +220,8 @@
           mode: "playing",
           time: 0,
           score: 0,
+          wins: readWins(),
+          lastLossWasWin: false,
           round: 1,
           nextRoundAt: 0,
           upgrades: { rapid: 0, thrusters: 0, shield: 0 },
@@ -242,9 +255,8 @@
             scale,
             hp,
             maxHp: hp,
-            dir: (index + round) % 2 ? 1 : -1,
-            minX: Math.max(22, x - 38),
-            maxX: Math.min(W - width - 22, x + 38),
+            vx: ((index + round) % 2 ? 1 : -1) * (62 + Math.random() * 32 + round * 8),
+            vy: (index % 2 ? 1 : -1) * (32 + Math.random() * 26 + round * 5),
             shot: .8 + Math.random() * .9,
             smiling: false
           };
@@ -265,6 +277,15 @@
         if (state.mode !== "upgrade") return;
         state.upgrades[type] += 1;
         loadRound(state.round + 1);
+      }
+
+      function loseGame() {
+        if (state.mode !== "playing") return;
+        state.lastLossWasWin = state.wins > 0;
+        state.wins = Math.max(0, state.wins - 1);
+        saveWins();
+        state.mode = "lost";
+        addSparks(state.player.x + state.player.w / 2, state.player.y + state.player.h / 2, "#ff5d9e");
       }
 
       function rectsTouch(a, b) {
@@ -323,8 +344,16 @@
 
         for (const monster of state.monsters) {
           if (monster.smiling) continue;
-          monster.x += monster.dir * (72 + state.round * 13) * dt;
-          if (monster.x < monster.minX || monster.x > monster.maxX) monster.dir *= -1;
+          monster.x += monster.vx * dt;
+          monster.y += monster.vy * dt;
+          if (monster.x < 22 || monster.x + monster.w > W - 22) {
+            monster.x = Math.max(22, Math.min(W - 22 - monster.w, monster.x));
+            monster.vx *= -1;
+          }
+          if (monster.y < 62 || monster.y + monster.h > H * .48 - 8) {
+            monster.y = Math.max(62, Math.min(H * .48 - 8 - monster.h, monster.y));
+            monster.vy *= -1;
+          }
           monster.shot -= dt;
           if (monster.shot <= 0) {
             state.bolts.push({ x: monster.x + monster.w / 2 - 5, y: monster.y + monster.h - 2, w: 10, h: 18, speed: 190 + state.round * 14 });
@@ -334,6 +363,16 @@
 
         for (const word of state.words) word.y -= word.speed * dt;
         for (const bolt of state.bolts) bolt.y += bolt.speed * dt;
+
+        for (const word of state.words) {
+          for (const bolt of state.bolts) {
+            if (!word.hit && !bolt.hit && rectsTouch(word, bolt)) {
+              word.hit = true;
+              bolt.hit = true;
+              addSparks(bolt.x + bolt.w / 2, bolt.y + bolt.h / 2, "#5ee7f2");
+            }
+          }
+        }
 
         for (const word of state.words) {
           for (const monster of state.monsters) {
@@ -351,7 +390,9 @@
         }
 
         if (state.monsters.every(monster => monster.smiling)) {
-              state.mode = "smiling";
+          state.wins += 1;
+          saveWins();
+          state.mode = "smiling";
           state.nextRoundAt = state.time + 1.3;
           state.bolts = [];
         }
@@ -363,13 +404,12 @@
               state.upgrades.shield -= 1;
               addSparks(p.x + p.w / 2, p.y + p.h / 2, "#5ee7f2");
             } else {
-              state.mode = "lost";
-              addSparks(p.x + p.w / 2, p.y + p.h / 2, "#ff5d9e");
+              loseGame();
             }
           }
         }
 
-        if (state.monsters.some(monster => !monster.smiling && rectsTouch(p, monster))) state.mode = "lost";
+        if (state.monsters.some(monster => !monster.smiling && rectsTouch(p, monster))) loseGame();
         state.words = state.words.filter(w => !w.hit && w.y > 40);
         state.bolts = state.bolts.filter(b => !b.hit && b.y < H + 30);
       }
@@ -434,7 +474,11 @@
         ctx.font = "bold 18px Courier New";
         ctx.fillStyle = "#ffd166";
         ctx.textAlign = "center";
-        ctx.fillText(`KINDNESS ${String(state.score).padStart(4, "0")}`, W / 2, 24);
+        ctx.fillText(`KINDNESS ${String(state.score).padStart(4, "0")}`, W / 2, 18);
+        ctx.font = "bold 12px Courier New";
+        ctx.fillStyle = "#5ee7f2";
+        ctx.fillText(`WINS ${state.wins}`, W / 2, 38);
+        ctx.font = "bold 18px Courier New";
         ctx.textAlign = "right";
         ctx.fillStyle = "#f7f2db";
         const cheered = state.monsters.filter(monster => monster.smiling).length;
@@ -473,7 +517,7 @@
           ctx.fillText("SHIP BONKED!", W / 2, 190);
           ctx.fillStyle = "#f7f2db";
           ctx.font = "bold 22px Courier New";
-          ctx.fillText("DODGE THE PINK GLITCH BOLTS", W / 2, 238);
+          ctx.fillText(state.lastLossWasWin ? "A WIN WAS LOST" : "DODGE THE PINK GLITCH BOLTS", W / 2, 238);
         }
 
         if (state.mode === "lost") {
